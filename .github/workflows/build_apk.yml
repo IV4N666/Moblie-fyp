@@ -25,6 +25,9 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Scaffold Android platform files
+        run: flutter create . --org com.example --platforms=android
+
       - name: Install dependencies
         run: flutter pub get
 
