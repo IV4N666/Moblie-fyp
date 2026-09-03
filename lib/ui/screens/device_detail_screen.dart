@@ -3,7 +3,10 @@ import '../../models/device_model.dart';
 import '../../models/security_model.dart';
 import '../../services/scanner_service.dart';
 import '../../services/history_service.dart';
+import '../../services/app_settings_service.dart';
 import '../widgets/vulnerability_card.dart';
+import 'custom_port_scan_screen.dart';
+import 'ping_diagnostic_screen.dart';
 
 class DeviceDetailScreen extends StatefulWidget {
   final DiscoveredDevice device;
@@ -338,7 +341,94 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
+
+          // Expert Diagnostics Card (Only in Expert Mode)
+          if (AppSettingsService().isExpertMode) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3E2723), // Deep Cocoa HUD
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.terminal_rounded, color: Color(0xFFFFCCBC), size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'EXPERT HOST DIAGNOSTICS',
+                        style: TextStyle(
+                          color: Color(0xFFFFCCBC),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Target: ${device.ip} | Hostname: ${device.hostname}',
+                    style: const TextStyle(color: Color(0xFFD7CCC8), fontSize: 11, fontFamily: 'monospace'),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'OS Fingerprint: ${device.category == DeviceCategory.computer ? "TTL ≈ 128 (Windows NT/Server Stack)" : "TTL ≈ 64 (Linux / Embedded RTOS Stack)"}',
+                    style: const TextStyle(color: Color(0xFFBCAAA4), fontSize: 11, fontFamily: 'monospace'),
+                  ),
+                  const Divider(color: Color(0xFF5D4037), height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFFFE0B2),
+                            side: const BorderSide(color: Color(0xFF8D6E63)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          icon: const Icon(Icons.manage_search_rounded, size: 16),
+                          label: const Text('Custom Port Sweep', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CustomPortScanScreen(
+                                initialIp: device.ip,
+                                initialDeviceName: device.displayName,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFFFE0B2),
+                            side: const BorderSide(color: Color(0xFF8D6E63)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          icon: const Icon(Icons.network_ping_rounded, size: 16),
+                          label: const Text('Ping / Jitter Test', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PingDiagnosticScreen(initialHost: device.ip),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // Security Vulnerabilities Section
           Row(

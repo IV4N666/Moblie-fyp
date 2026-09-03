@@ -11,6 +11,11 @@ import '../widgets/report_modal.dart';
 import 'device_detail_screen.dart';
 import 'security_tips_screen.dart';
 import 'anomaly_detection_screen.dart';
+import '../../services/app_settings_service.dart';
+import 'expert_dashboard_view.dart';
+import 'hidden_camera_screen.dart';
+import 'custom_port_scan_screen.dart';
+import 'ping_diagnostic_screen.dart';
 
 enum DeviceFilter { all, risky, clean, gateway, cameras, iot }
 
@@ -25,6 +30,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final NetworkInfoService _netInfoService = NetworkInfoService();
   final ScannerService _scannerService = ScannerService();
   final HistoryService _historyService = HistoryService();
+  final AppSettingsService _settingsService = AppSettingsService();
 
   NetworkContext? _networkContext;
   bool _isScanning = false;
@@ -50,13 +56,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _settingsService.addListener(_onSettingsChanged);
     _loadNetworkContext();
   }
 
   @override
   void dispose() {
+    _settingsService.removeListener(_onSettingsChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onSettingsChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadNetworkContext() async {
@@ -254,7 +266,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Wi-Fi Security Guardian'),
-        centerTitle: true,
+        centerTitle: false,
+        leadingWidth: 96,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 10.0),
+          child: Center(
+            child: InkWell(
+              onTap: () {
+                _settingsService.toggleMode();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(_settingsService.isExpertMode
+                        ? '💻 Switched to Expert Technical Mode'
+                        : '📱 Switched to Normal Consumer Mode'),
+                    duration: const Duration(seconds: 1),
+                    backgroundColor: primaryWarm,
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _settingsService.isExpertMode ? deepMocha : const Color(0xFFEFEBE9),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _settingsService.isExpertMode ? deepMocha : const Color(0xFFD7CCC8),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _settingsService.isExpertMode ? Icons.computer_rounded : Icons.phone_android_rounded,
+                      size: 13,
+                      color: _settingsService.isExpertMode ? Colors.white : primaryWarm,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      _settingsService.isExpertMode ? 'Expert' : 'Normal',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: _settingsService.isExpertMode ? Colors.white : primaryWarm,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         actions: [
           // Presentation Demo Mode toggle
           IconButton(
@@ -313,9 +375,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        color: primaryWarm,
-        onRefresh: _startNetworkScan,
+      body: _settingsService.isExpertMode
+          ? ExpertDashboardView(
+              networkContext: _networkContext,
+              devices: _devices,
+              overallScore: _score,
+              tier: SecurityTierExtension.fromScore(_score),
+              onReScan: _startNetworkScan,
+            )
+          : RefreshIndicator(
+              color: primaryWarm,
+              onRefresh: _startNetworkScan,
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
