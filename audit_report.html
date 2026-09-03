@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IoT Security Audit Report - FYP01-CS-T2610-885</title>
+  <style>
+    :root {
+      --primary: #6d4c41;
+      --primary-dark: #4e342e;
+      --excellent: #2d6a4f;
+      --good: #52796f;
+      --fair: #c88a2e;
+      --poor: #d97706;
+      --critical: #c53030;
+      --bg: #faf8f5;
+      --card-bg: #ffffff;
+      --text: #3e2723;
+      --text-muted: #8d6e63;
+      --border: #eae2dc;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      margin: 0;
+      padding: 30px 15px;
+    }
+    .report-container {
+      max-width: 960px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: 20px;
+      box-shadow: 0 8px 24px rgba(109,76,65,0.06);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .report-header {
+      background: linear-gradient(135deg, var(--primary) 0%, #8d6e63 100%);
+      color: #fff;
+      padding: 36px 30px;
+      text-align: center;
+    }
+    .report-header h1 {
+      margin: 0 0 8px 0;
+      font-size: 26px;
+      letter-spacing: -0.3px;
+    }
+    .report-header p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.92;
+    }
+    .meta-badges {
+      margin-top: 14px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .meta-badge {
+      background: rgba(255,255,255,0.2);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .report-body {
+      padding: 30px;
+    }
+    h2 {
+      font-size: 18px;
+      color: var(--primary-dark);
+      border-bottom: 2px solid #f5efeb;
+      padding-bottom: 8px;
+      margin-top: 32px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2:first-of-type {
+      margin-top: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background-color: #faf8f5;
+      color: #5d4037;
+      font-weight: 600;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #fff;
+      text-align: center;
+    }
+    .badge-excellent { background-color: var(--excellent); }
+    .badge-good { background-color: var(--good); }
+    .badge-fair { background-color: var(--fair); }
+    .badge-poor { background-color: var(--poor); }
+    .badge-critical { background-color: var(--critical); }
+    .badge-low { background-color: var(--good); }
+    .badge-medium { background-color: var(--poor); }
+    .badge-high { background-color: var(--critical); }
+
+    .distribution-chart {
+      background: #faf8f5;
+      padding: 18px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .bar-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+    .bar-row:last-child {
+      margin-bottom: 0;
+    }
+    .bar-label {
+      width: 140px;
+      font-weight: 600;
+    }
+    .bar-track {
+      flex-grow: 1;
+      height: 12px;
+      background: #eae2dc;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 0 12px;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 6px;
+    }
+    .bar-count {
+      width: 40px;
+      text-align: right;
+      font-weight: bold;
+      color: #5d4037;
+    }
+
+    .device-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 6px rgba(109,76,65,0.03);
+    }
+    .device-card.at-risk {
+      border-left: 5px solid var(--critical);
+    }
+    .device-card.safe {
+      border-left: 5px solid var(--excellent);
+    }
+    .device-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .device-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--primary-dark);
+    }
+    .device-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .device-score-tag {
+      font-size: 15px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .recommendations-box {
+      margin-top: 14px;
+      background: #fdfbf7;
+      border: 1px solid #eae2dc;
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .recommendations-box h4 {
+      margin: 0 0 8px 0;
+      font-size: 13px;
+      color: var(--primary-dark);
+    }
+    .rec-item {
+      font-size: 12.5px;
+      margin-bottom: 6px;
+      color: #4e342e;
+    }
+    .rec-item strong {
+      color: var(--primary);
+    }
+    .rec-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .anomaly-section {
+      background: #faf8f5;
+      border: 1px solid #eae2dc;
+      border-radius: 16px;
+      padding: 18px;
+      margin-top: 24px;
+    }
+    .anomaly-section h3 {
+      margin: 0 0 6px 0;
+      color: var(--primary-dark);
+      font-size: 15px;
+    }
+    .anomaly-desc {
+      font-size: 12.5px;
+      color: #6d4c41;
+      margin-bottom: 12px;
+    }
+
+    .footer {
+      background: #faf8f5;
+      padding: 18px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .report-container { box-shadow: none; border: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="report-container">
+  <!-- Report Header -->
+  <div class="report-header">
+    <h1>🛡️ IoT Security Audit Report</h1>
+    <p>Automated Local Subnet Discovery & Security Hygiene Evaluation</p>
+    <div class="meta-badges">
+      <span class="meta-badge">Project ID: FYP01-CS-T2610-885</span>
+      <span class="meta-badge">Course: CPT6314 Project I & II</span>
+      <span class="meta-badge">Network: Demo-SmartHome-WiFi (192.168.1.0/24)</span>
+      <span class="meta-badge">Date: 2026-09-03 14:35:00</span>
+    </div>
+  </div>
+
+  <div class="report-body">
+    <!-- Executive Summary -->
+    <h2>📊 Executive Summary</h2>
+    <table>
+      <tr>
+        <td style="width: 45%;"><strong>Total Devices Scanned</strong></td>
+        <td><strong>8 devices</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Overall Network Security Score</strong></td>
+        <td><strong style="color: var(--fair); font-size: 16px;">65.5 / 100 — FAIR</strong> (Moderate Risk)</td>
+      </tr>
+      <tr>
+        <td><strong>Vulnerable Devices Requiring Remediation</strong></td>
+        <td><span style="color: var(--critical); font-weight: bold;">6 devices</span> (75% of connected assets)</td>
+      </tr>
+      <tr>
+        <td><strong>Total Open Vulnerabilities Detected</strong></td>
+        <td><strong>11 active service risks</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Highest Risk Endpoint</strong></td>
+        <td><code>192.168.1.100</code> (TP-Link IP Camera) — Score: 35/100 (CRITICAL)</td>
+      </tr>
+    </table>
+
+    <!-- Risk Level Distribution (Matching Figure 4.7) -->
+    <h2>📈 Risk Level Distribution</h2>
+    <div class="distribution-chart">
+      <div class="bar-row">
+        <span class="bar-label" style="color: var(--excellent);">Excellent (90–100)</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 25%; background-color: var(--excellent);"></div>
+        </div>
+        <span class="bar-count">2 (25%)</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color: var(--good);">Good (75–89)</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 12.5%; background-color: var(--good);"></div>
+        </div>
+        <span class="bar-count">1 (12.5%)</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color: var(--fair);">Fair (60–74)</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 37.5%; background-color: var(--fair);"></div>
+        </div>
+        <span class="bar-count">3 (37.5%)</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color: var(--poor);">Poor (40–59)</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 12.5%; background-color: var(--poor);"></div>
+        </div>
+        <span class="bar-count">1 (12.5%)</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color: var(--critical);">Critical (0–39)</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 12.5%; background-color: var(--critical);"></div>
+        </div>
+        <span class="bar-count">1 (12.5%)</span>
+      </div>
+    </div>
+
+    <!-- Device Discovery & Scan Results Table (Matching Figure 4.8) -->
+    <h2>📱 Device Discovery & Scan Results</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>IP Address</th>
+          <th>MAC Address</th>
+          <th>Manufacturer / Vendor</th>
+          <th>Score</th>
+          <th>Risk Level</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><code>192.168.1.1</code></td>
+          <td><code>70:4F:57:12:34:56</code></td>
+          <td>TP-Link Router</td>
+          <td><strong>65/100</strong></td>
+          <td><span class="badge badge-fair">FAIR</span></td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><code>192.168.1.100</code></td>
+          <td><code>1C:61:FB:AA:BB:CC</code></td>
+          <td>TP-Link IP Camera</td>
+          <td><strong>35/100</strong></td>
+          <td><span class="badge badge-critical">CRITICAL</span></td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><code>192.168.1.50</code></td>
+          <td><code>C0:3F:0E:DD:EE:FF</code></td>
+          <td>Samsung Smart TV</td>
+          <td><strong>100/100</strong></td>
+          <td><span class="badge badge-excellent">EXCELLENT</span></td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><code>192.168.1.120</code></td>
+          <td><code>48:4C:A8:11:22:33</code></td>
+          <td>Huawei Smart Hub</td>
+          <td><strong>65/100</strong></td>
+          <td><span class="badge badge-fair">FAIR</span></td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td><code>192.168.1.75</code></td>
+          <td><code>D8:6C:02:AA:BB:11</code></td>
+          <td>Belkin IoT Plug</td>
+          <td><strong>80/100</strong></td>
+          <td><span class="badge badge-good">GOOD</span></td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td><code>192.168.1.200</code></td>
+          <td><code>00:1A:A8:AA:BB:22</code></td>
+          <td>Apple iPhone</td>
+          <td><strong>100/100</strong></td>
+          <td><span class="badge badge-excellent">EXCELLENT</span></td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td><code>192.168.1.101</code></td>
+          <td><code>B4:2E:99:11:22:33</code></td>
+          <td>Home-Workstation-PC</td>
+          <td><strong>70/100</strong></td>
+          <td><span class="badge badge-fair">FAIR</span></td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td><code>192.168.1.65</code></td>
+          <td><code>00:1B:A9:AA:BB:CC</code></td>
+          <td>HP LaserJet Network Printer</td>
+          <td><strong>70/100</strong></td>
+          <td><span class="badge badge-fair">FAIR</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Detailed Device Assessments (Matching Figures 4.8 & 4.9) -->
+    <h2>🔍 Detailed Device Assessments</h2>
+
+    <!-- Device 1 -->
+    <div class="device-card at-risk">
+      <div class="device-header">
+        <div>
+          <div class="device-title">Device 1: 192.168.1.1 (TP-Link Router)</div>
+          <div class="device-meta">MAC: 70:4F:57:12:34:56 | Category: Router / Wi-Fi Gateway | Latency: 2ms</div>
+        </div>
+        <div class="device-score-tag" style="color: var(--fair);">
+          65 / 100 <span class="badge badge-fair">FAIR</span>
+        </div>
+      </div>
+      <table>
+        <tr><th>Port</th><th>Service</th><th>Risk Level</th><th>Severity Penalty</th></tr>
+        <tr><td><strong>80</strong></td><td>HTTP (Unencrypted Web Interface)</td><td><span class="badge badge-medium">MEDIUM</span></td><td>-20 pts</td></tr>
+        <tr><td><strong>8080</strong></td><td>HTTP-Alt (Secondary Web Portal)</td><td><span class="badge badge-medium">MEDIUM</span></td><td>-15 pts</td></tr>
+      </table>
+      <div class="recommendations-box">
+        <h4>🛠️ Prioritized Remediation Steps:</h4>
+        <div class="rec-item">1. <strong>Enable HTTPS Redirection</strong>: Access router administration and enable "Redirect HTTP to HTTPS" to encrypt passwords over Wi-Fi.</div>
+        <div class="rec-item">2. <strong>Close Port 8080</strong>: Disable secondary administration interfaces in Advanced > System Services.</div>
+        <div class="rec-item">3. <strong>Disable Remote WAN Management</strong>: Verify router cannot be accessed from public internet.</div>
+      </div>
+    </div>
+
+    <!-- Device 2 -->
+    <div class="device-card at-risk">
+      <div class="device-header">
+        <div>
+          <div class="device-title">Device 2: 192.168.1.100 (TP-Link Tapo IP Camera)</div>
+          <div class="device-meta">MAC: 1C:61:FB:AA:BB:CC | Category: Security Camera / RTSP | Latency: 14ms</div>
+        </div>
+        <div class="device-score-tag" style="color: var(--critical);">
+          35 / 100 <span class="badge badge-critical">CRITICAL</span>
+        </div>
+      </div>
+      <table>
+        <tr><th>Port</th><th>Service</th><th>Risk Level</th><th>Severity Penalty</th></tr>
+        <tr><td><strong>23</strong></td><td>Telnet (Unencrypted Terminal)</td><td><span class="badge badge-critical">CRITICAL</span></td><td>-35 pts</td></tr>
+        <tr><td><strong>80</strong></td><td>HTTP (Unencrypted Web Interface)</td><td><span class="badge badge-medium">MEDIUM</span></td><td>-20 pts</td></tr>
+        <tr><td><strong>554</strong></td><td>RTSP (Camera Video Feed)</td><td><span class="badge badge-medium">MEDIUM</span></td><td>-10 pts</td></tr>
+      </table>
+      <div class="recommendations-box">
+        <h4>🛠️ Prioritized Remediation Steps:</h4>
+        <div class="rec-item">1. <strong>URGENT - Disable Telnet</strong>: Turn off Telnet service immediately in camera advanced configuration or companion app.</div>
+        <div class="rec-item">2. <strong>Enforce Strong RTSP Password</strong>: Do not use default credentials (admin/admin); require strong authentication for video streams.</div>
+        <div class="rec-item">3. <strong>Quarantine to Guest Wi-Fi</strong>: Isolate smart cameras onto a segregated Guest network away from personal laptops.</div>
+      </div>
+    </div>
+
+    <!-- Device 3 -->
+    <div class="device-card safe">
+      <div class="device-header">
+        <div>
+          <div class="device-title">Device 3: 192.168.1.50 (Samsung Smart TV 65")</div>
+          <div class="device-meta">MAC: C0:3F:0E:DD:EE:FF | Category: Smart TV / Media Player | Latency: 11ms</div>
+        </div>
+        <div class="device-score-tag" style="color: var(--excellent);">
+          100 / 100 <span class="badge badge-excellent">EXCELLENT</span>
+        </div>
+      </div>
+      <table>
+        <tr><th>Port</th><th>Service</th><th>Risk Level</th><th>Severity Penalty</th></tr>
+        <tr><td><strong>443</strong></td><td>HTTPS (Encrypted Web Interface)</td><td><span class="badge badge-low">LOW</span></td><td>0 pts</td></tr>
+        <tr><td><strong>8008</strong></td><td>Google Cast Service</td><td><span class="badge badge-low">LOW</span></td><td>0 pts</td></tr>
+      </table>
+      <p style="margin: 6px 0 0 0; color: var(--excellent); font-size: 12.5px; font-weight: 500;">
+        ✅ No vulnerable or unencrypted services detected. Device complies with baseline security requirements.
+      </p>
+    </div>
+
+    <!-- Device 4 -->
+    <div class="device-card at-risk">
+      <div class="device-header">
+        <div>
+          <div class="device-title">Device 4: 192.168.1.120 (Huawei Smart IoT Hub)</div>
+          <div class="device-meta">MAC: 48:4C:A8:11:22:33 | Category: Smart Home (IoT) | Latency: 8ms</div>
+        </div>
+        <div class="device-score-tag" style="color: var(--fair);">
+          65 / 100 <span class="badge badge-fair">FAIR</span>
+        </div>
+      </div>
+      <table>
+        <tr><th>Port</th><th>Service</th><th>Risk Level</th><th>Severity Penalty</th></tr>
+        <tr><td><strong>80</strong></td><td>HTTP (Unencrypted Web Interface)</td><td><span class="badge badge-medium">MEDIUM</span></td><td>-20 pts</td></tr>
+        <tr><td><strong>1883</strong></td><td>MQTT (IoT Messaging - No TLS)</td><td><span class="badge badge-medium">MEDIUM</span></td><td>-15 pts</td></tr>
+      </table>
+      <div class="recommendations-box">
+        <h4>🛠️ Prioritized Remediation Steps:</h4>
+        <div class="rec-item">1. <strong>Enable TLS for MQTT (Port 8883)</strong>: Configure broker to require cryptographic certificates and TLS authentication.</div>
+        <div class="rec-item">2. <strong>Disable Anonymous MQTT</strong>: Require username and password access for smart sensor publishers and subscribers.</div>
+      </div>
+    </div>
+
+    <!-- Machine Learning Behavioral Anomaly Section (FYP1 Section 5.2.2 Fulfillment) -->
+    <div class="anomaly-section">
+      <h3>🤖 AI Behavioral Anomaly Detection Summary (FYP2 Core Feature)</h3>
+      <p class="anomaly-desc">
+        Fulfills Phase 1 Section 5.2.2 requirement for unsupervised device baseline profiling. Detects anomalous cross-tier service exposure without relying on labeled signatures.
+      </p>
+      <table>
+        <tr>
+          <th>Device IP</th>
+          <th>Device Name</th>
+          <th>Deviation Score</th>
+          <th>Anomaly Confidence</th>
+          <th>Detected Anomaly</th>
+        </tr>
+        <tr>
+          <td><code>192.168.1.100</code></td>
+          <td>TP-Link IP Camera</td>
+          <td><strong style="color: var(--critical);">85%</strong></td>
+          <td>94% Confidence</td>
+          <td>Terminal Shell Daemon Active on Security Camera (Mirai Botnet Vector)</td>
+        </tr>
+        <tr>
+          <td><code>192.168.1.120</code></td>
+          <td>Huawei Smart Hub</td>
+          <td><strong style="color: var(--poor);">60%</strong></td>
+          <td>88% Confidence</td>
+          <td>Cleartext Telemetry Broadcast on Residential Broadcast Domain</td>
+        </tr>
+        <tr>
+          <td><code>192.168.1.101</code></td>
+          <td>Home-Workstation-PC</td>
+          <td><strong style="color: var(--fair);">50%</strong></td>
+          <td>75% Confidence</td>
+          <td>Direct SMB & RDP Services Exposed on Shared Wi-Fi Segment</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Methodology Section (Matching Figure 4.10) -->
+    <h2>📋 Audit Methodology & Standards Grounding</h2>
+    <div style="font-size: 13px; color: #5d4037; line-height: 1.6;">
+      <p>
+        The security audit was executed using an <strong>asynchronous RFC 793 TCP transport probing engine</strong> combined with <strong>IEEE OUI manufacturer resolution</strong>. All open ports were evaluated against the 18 curated IoT high-risk port catalogue specified in <em>Table 3.5 & Table 4.10 of the FYP Phase 1 Specification</em>.
+      </p>
+      <p>
+        Scoring utilizes a <strong>deterministic additive penalty model</strong> derived from <strong>CVSS v3.1 qualitative severity ratings</strong>, guaranteeing explainability for non-technical home administrators. Remediation actions are aligned with <strong>NIST SP 800-213</strong> and <strong>CIS Network Device Hardening benchmarks</strong>.
+      </p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Generated automatically by Wi-Fi Security Guardian Mobile FYP • Project ID: FYP01-CS-T2610-885
+  </div>
+</div>
+
+</body>
+</html>

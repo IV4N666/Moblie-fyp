@@ -1,188 +1,526 @@
 import 'package:flutter/material.dart';
 import '../../models/device_model.dart';
+import '../../models/security_model.dart';
+import '../../services/scanner_service.dart';
+import '../../services/history_service.dart';
 import '../widgets/vulnerability_card.dart';
 
-class DeviceDetailScreen extends StatelessWidget {
+class DeviceDetailScreen extends StatefulWidget {
   final DiscoveredDevice device;
+  final String? gatewayIp;
 
-  const DeviceDetailScreen({super.key, required this.device});
+  const DeviceDetailScreen({
+    super.key,
+    required this.device,
+    this.gatewayIp,
+  });
+
+  @override
+  State<DeviceDetailScreen> createState() => _DeviceDetailScreenState();
+}
+
+class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
+  late DiscoveredDevice _currentDevice;
+  final HistoryService _historyService = HistoryService();
+  final ScannerService _scannerService = ScannerService();
+  bool _isRechecking = false;
+
+  // Warm theme palette
+  static const primaryWarm = Color(0xFF6D4C41); // Warm Mocha
+  static const deepMocha = Color(0xFF4E342E);   // Deep Espresso
+  static const softBrown = Color(0xFF8D6E63);   // Soft Caramel Brown
+  static const warmCream = Color(0xFFF5EFEB);   // Soft Warm Cream
+
+  @override
+  void initState() {
+    super.initState();
+    _currentDevice = widget.device;
+  }
 
   IconData _getDeviceIcon(DeviceCategory cat) {
     switch (cat) {
       case DeviceCategory.gateway:
-        return Icons.router;
+        return Icons.router_outlined;
       case DeviceCategory.smartCamera:
-        return Icons.videocam;
+        return Icons.videocam_outlined;
       case DeviceCategory.printer:
-        return Icons.print;
+        return Icons.print_outlined;
       case DeviceCategory.computer:
-        return Icons.laptop_mac;
+        return Icons.laptop_outlined;
       case DeviceCategory.phoneOrTablet:
-        return Icons.phone_iphone;
+        return Icons.smartphone_outlined;
       case DeviceCategory.entertainment:
-        return Icons.tv;
+        return Icons.tv_outlined;
       case DeviceCategory.iotDevice:
-        return Icons.sensors;
+        return Icons.sensors_outlined;
       case DeviceCategory.unknown:
-        return Icons.device_unknown;
+        return Icons.devices_other_outlined;
+    }
+  }
+
+  Future<void> _showRenameDialog() async {
+    final controller = TextEditingController(text: _currentDevice.displayName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Customize Device Name',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: deepMocha),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'e.g. Living Room Camera',
+            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFA1887F)),
+            filled: true,
+            fillColor: warmCream,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: softBrown)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryWarm,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save Name', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty) {
+      setState(() {
+        _currentDevice = _currentDevice.copyWith(customAlias: newName);
+      });
+      _historyService.setCustomAlias(_currentDevice.ip, newName);
+    }
+  }
+
+  void _toggleTrustStatus() {
+    final newTrust = !_currentDevice.isTrusted;
+    setState(() {
+      _currentDevice = _currentDevice.copyWith(isTrusted: newTrust);
+    });
+    _historyService.setDeviceTrusted(_currentDevice.ip, newTrust);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(newTrust
+            ? '${_currentDevice.displayName} marked as trusted.'
+            : '${_currentDevice.displayName} unmarked as trusted.'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: primaryWarm,
+      ),
+    );
+  }
+
+  Future<void> _recheckDevice() async {
+    setState(() {
+      _isRechecking = true;
+    });
+
+    final updated = await _scannerService.recheckHost(
+      ip: _currentDevice.ip,
+      mac: _currentDevice.macAddress,
+      hostname: _currentDevice.hostname,
+      category: _currentDevice.category,
+      vendor: _currentDevice.vendor,
+    );
+
+    if (mounted) {
+      setState(() {
+        _currentDevice = _currentDevice.copyWith(
+          openPorts: updated.openPorts,
+          vulnerabilities: updated.vulnerabilities,
+          responseTimeMs: updated.responseTimeMs,
+        );
+        _isRechecking = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(updated.hasIssues
+              ? 'Re-check complete: ${updated.vulnerabilities.length} active risk(s) detected.'
+              : 'Re-check complete: Device is fully secured! 🎉'),
+          backgroundColor: updated.hasIssues ? const Color(0xFFD97706) : const Color(0xFF2D6A4F),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final device = _currentDevice;
+    final devScore = (100 - device.riskScoreDeduction).clamp(0, 100);
+    final tier = SecurityTierExtension.fromScore(devScore);
+
+    Color tierColor;
+    Color tierBg;
+    if (devScore >= 90) {
+      tierColor = const Color(0xFF2D6A4F);
+      tierBg = const Color(0xFFEAF5EE);
+    } else if (devScore >= 75) {
+      tierColor = const Color(0xFF52796F);
+      tierBg = const Color(0xFFE0F2F1);
+    } else if (devScore >= 60) {
+      tierColor = const Color(0xFFC88A2E);
+      tierBg = const Color(0xFFFFF8E1);
+    } else if (devScore >= 40) {
+      tierColor = const Color(0xFFD97706);
+      tierBg = const Color(0xFFFFF3E0);
+    } else {
+      tierColor = const Color(0xFFC53030);
+      tierBg = const Color(0xFFFFEBEE);
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(device.hostname),
+        title: Text(device.displayName),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              device.isTrusted ? Icons.verified : Icons.verified_outlined,
+              color: device.isTrusted ? const Color(0xFF2D6A4F) : softBrown,
+            ),
+            tooltip: device.isTrusted ? 'Trusted Device' : 'Mark as Trusted',
+            onPressed: _toggleTrustStatus,
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Rename Device',
+            color: softBrown,
+            onPressed: _showRenameDialog,
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // Device Header Card
           Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0.8,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
+              padding: const EdgeInsets.all(18),
+              child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: device.hasIssues ? Colors.orange.shade100 : Colors.green.shade100,
-                    child: Icon(
-                      _getDeviceIcon(device.category),
-                      size: 32,
-                      color: device.hasIssues ? Colors.orange.shade800 : Colors.green.shade800,
-                    ),
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: device.hasIssues ? const Color(0xFFFFF3E0) : const Color(0xFFEAF5EE),
+                        child: Icon(
+                          _getDeviceIcon(device.category),
+                          size: 30,
+                          color: device.hasIssues ? const Color(0xFFD97706) : const Color(0xFF2D6A4F),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    device.displayName,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: deepMocha,
+                                    ),
+                                  ),
+                                ),
+                                if (device.isTrusted)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEAF5EE),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text(
+                                      'TRUSTED',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF2D6A4F),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${device.categoryDisplayName} • ${device.vendor}',
+                              style: TextStyle(color: Colors.grey.shade700, fontSize: 12.5),
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: warmCream,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'IP: ${device.ip}  (${device.responseTimeMs}ms)',
+                                    style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: deepMocha),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: tierBg,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: tierColor.withOpacity(0.3)),
+                                  ),
+                                  child: Text(
+                                    'Score: $devScore/100 (${tier.displayName})',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: tierColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          device.hostname,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${device.categoryDisplayName} • ${device.vendor}',
-                          style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: Text(
-                            'IP: ${device.ip}  (${device.responseTimeMs}ms)',
-                            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                          ),
-                        ),
-                      ],
+                  const SizedBox(height: 12),
+                  const Divider(color: Color(0xFFEFEBE9)),
+
+                  // Re-test Device Action Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _isRechecking ? null : _recheckDevice,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: primaryWarm,
+                        side: const BorderSide(color: Color(0xFFD7CCC8)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      icon: _isRechecking
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(primaryWarm)),
+                            )
+                          : const Icon(Icons.refresh_rounded, size: 18),
+                      label: Text(
+                        _isRechecking ? 'Re-probing Device...' : 'Re-Check Device Security Now',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
           // Security Vulnerabilities Section
           Row(
             children: [
               Icon(
-                device.hasIssues ? Icons.warning_amber_rounded : Icons.verified_user_rounded,
-                color: device.hasIssues ? Colors.red : Colors.green,
+                device.hasIssues ? Icons.warning_amber_rounded : Icons.verified_user_outlined,
+                color: device.hasIssues ? const Color(0xFFD97706) : const Color(0xFF2D6A4F),
+                size: 20,
               ),
               const SizedBox(width: 8),
               Text(
                 device.hasIssues
-                    ? 'Detected Security Risks (${device.vulnerabilities.length})'
+                    ? 'Recommended Actions (${device.vulnerabilities.length})'
                     : 'Security Status: Clean',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: deepMocha,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
 
-          if (device.hasIssues)
-            ...device.vulnerabilities.map((vuln) {
-              return VulnerabilityCard(vulnerability: vuln, deviceIp: device.ip);
-            }).toList()
-          else
+          if (!device.hasIssues)
             Card(
-              color: Colors.green.shade50,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: const Padding(
-                padding: EdgeInsets.all(16.0),
+              elevation: 0.6,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
                 child: Row(
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green),
-                    SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEAF5EE),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check, color: Color(0xFF2D6A4F), size: 24),
+                    ),
+                    const SizedBox(width: 14),
                     Expanded(
-                      child: Text(
-                        'No unencrypted or legacy high-risk services found on this device.',
-                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'No Security Risks Found',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: deepMocha),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'This device does not expose unencrypted or vulnerable administration services.',
+                            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
+            )
+          else
+            ...device.vulnerabilities.map(
+              (v) => VulnerabilityCard(vulnerability: v, deviceIp: device.ip),
             ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
 
-          // Open Ports & Services
+          // Network Technical Information
           const Text(
-            'Reachable Services / Ports',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            'Technical Hardware Details',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: deepMocha),
           ),
           const SizedBox(height: 8),
+          Card(
+            elevation: 0.6,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildDetailRow('IP Address', device.ip),
+                  const Divider(color: Color(0xFFF5EFEB)),
+                  _buildDetailRow('MAC Address', device.macAddress ?? 'Unavailable (Hidden by OS)'),
+                  const Divider(color: Color(0xFFF5EFEB)),
+                  _buildDetailRow('Hardware Vendor', device.vendor),
+                  const Divider(color: Color(0xFFF5EFEB)),
+                  _buildDetailRow('Network Hostname', device.hostname ?? 'Unknown'),
+                  const Divider(color: Color(0xFFF5EFEB)),
+                  _buildDetailRow('Latency (Ping)', '${device.responseTimeMs} ms'),
+                  const Divider(color: Color(0xFFF5EFEB)),
+                  _buildDetailRow('Role in Network', widget.gatewayIp == device.ip ? 'Default Gateway (Router)' : 'Client Host'),
+                ],
+              ),
+            ),
+          ),
 
+          const SizedBox(height: 18),
+
+          // Open Ports Section
+          Text(
+            'Active Listening Ports (${device.openPorts.length})',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: deepMocha),
+          ),
+          const SizedBox(height: 8),
           if (device.openPorts.isEmpty)
-            Text(
-              'No public listening ports detected.',
-              style: TextStyle(color: Colors.grey.shade600),
+            Card(
+              elevation: 0.6,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              child: const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'No common services listening. Device appears to operate in stealth mode.',
+                  style: TextStyle(color: softBrown, fontSize: 12),
+                ),
+              ),
             )
           else
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: device.openPorts.length,
-                separatorBuilder: (context, i) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final port = device.openPorts[index];
+              elevation: 0.6,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              child: Column(
+                children: device.openPorts.map((port) {
                   return ListTile(
-                    leading: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: port.isSecure ? Colors.green.shade100 : Colors.grey.shade200,
+                    dense: true,
+                    leading: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: port.isSecure ? const Color(0xFFEAF5EE) : const Color(0xFFFFF3E0),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Text(
                         '${port.port}',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontFamily: 'monospace',
                           fontWeight: FontWeight.bold,
-                          color: port.isSecure ? Colors.green.shade900 : Colors.black87,
+                          fontSize: 12,
+                          color: port.isSecure ? const Color(0xFF2D6A4F) : const Color(0xFFD97706),
                         ),
                       ),
                     ),
                     title: Text(
                       port.serviceName,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: deepMocha),
                     ),
                     subtitle: Text(
                       port.description,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                    trailing: Icon(
+                      port.isSecure ? Icons.lock_outline : Icons.lock_open_rounded,
+                      size: 17,
+                      color: port.isSecure ? const Color(0xFF2D6A4F) : const Color(0xFFD97706),
                     ),
                   );
-                },
+                }).toList(),
               ),
             ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: softBrown)),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: deepMocha,
+              ),
+            ),
+          ),
         ],
       ),
     );

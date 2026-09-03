@@ -17,10 +17,13 @@ class VendorLookupService {
 
     // 2. Smart Cameras
     if (openPorts.contains(554) ||
+        openPorts.contains(2323) ||
         lowerHost.contains('cam') ||
         lowerHost.contains('dahua') ||
         lowerHost.contains('hikvision') ||
         lowerHost.contains('reolink') ||
+        lowerHost.contains('wyze') ||
+        lowerHost.contains('eufy') ||
         lowerHost.contains('ring') ||
         lowerHost.contains('nest')) {
       return DeviceCategory.smartCamera;
@@ -34,7 +37,8 @@ class VendorLookupService {
         lowerHost.contains('epson') ||
         lowerHost.contains('hp') ||
         lowerHost.contains('canon') ||
-        lowerHost.contains('brother')) {
+        lowerHost.contains('brother') ||
+        lowerHost.contains('xerox')) {
       return DeviceCategory.printer;
     }
 
@@ -47,7 +51,8 @@ class VendorLookupService {
         lowerHost.contains('chromecast') ||
         lowerHost.contains('apple-tv') ||
         lowerHost.contains('bravia') ||
-        lowerHost.contains('shield')) {
+        lowerHost.contains('shield') ||
+        lowerHost.contains('firetv')) {
       return DeviceCategory.entertainment;
     }
 
@@ -59,7 +64,9 @@ class VendorLookupService {
         lowerHost.contains('pc') ||
         lowerHost.contains('desktop') ||
         lowerHost.contains('laptop') ||
-        lowerHost.contains('thinkpad')) {
+        lowerHost.contains('thinkpad') ||
+        lowerHost.contains('dell') ||
+        lowerHost.contains('surface')) {
       return DeviceCategory.computer;
     }
 
@@ -68,61 +75,107 @@ class VendorLookupService {
         lowerHost.contains('ipad') ||
         lowerHost.contains('android') ||
         lowerHost.contains('galaxy') ||
-        lowerHost.contains('pixel')) {
+        lowerHost.contains('pixel') ||
+        lowerHost.contains('oneplus')) {
       return DeviceCategory.phoneOrTablet;
     }
 
-    // 7. Generic IoT
+    // 7. Generic IoT / Smart Home
     if (openPorts.contains(1883) ||
+        openPorts.contains(1900) ||
         openPorts.contains(80) ||
         openPorts.contains(8080) ||
         lowerHost.contains('esp') ||
         lowerHost.contains('tuya') ||
         lowerHost.contains('sonoff') ||
         lowerHost.contains('hue') ||
-        lowerHost.contains('tasmota')) {
+        lowerHost.contains('tasmota') ||
+        lowerHost.contains('raspberry') ||
+        lowerHost.contains('homeassistant')) {
       return DeviceCategory.iotDevice;
     }
 
     return DeviceCategory.unknown;
   }
 
-  /// Identifies manufacturer name from hostname cues
+  /// Identifies manufacturer name from hostname cues, open ports, and IP
   static String inferVendor(String hostname, String ip, String? gatewayIp) {
     if (ip == gatewayIp || ip.endsWith('.1')) {
       return 'Router / Network Gateway';
     }
 
     final lower = hostname.toLowerCase();
-    if (lower.contains('apple') || lower.contains('iphone') || lower.contains('macbook') || lower.contains('ipad')) {
+    if (lower.contains('apple') ||
+        lower.contains('iphone') ||
+        lower.contains('macbook') ||
+        lower.contains('ipad')) {
       return 'Apple Inc.';
     }
     if (lower.contains('samsung') || lower.contains('galaxy')) {
       return 'Samsung Electronics';
     }
-    if (lower.contains('google') || lower.contains('pixel') || lower.contains('nest') || lower.contains('chromecast')) {
+    if (lower.contains('google') ||
+        lower.contains('pixel') ||
+        lower.contains('nest') ||
+        lower.contains('chromecast')) {
       return 'Google LLC';
     }
-    if (lower.contains('amazon') || lower.contains('echo') || lower.contains('kindle') || lower.contains('firetv')) {
+    if (lower.contains('amazon') ||
+        lower.contains('echo') ||
+        lower.contains('kindle') ||
+        lower.contains('firetv')) {
       return 'Amazon';
     }
     if (lower.contains('tplink') || lower.contains('tp-link')) {
-      return 'TP-Link';
+      return 'TP-Link Technologies';
     }
     if (lower.contains('asus')) {
       return 'ASUS';
     }
+    if (lower.contains('netgear')) {
+      return 'NETGEAR';
+    }
+    if (lower.contains('ubiquiti') || lower.contains('unifi')) {
+      return 'Ubiquiti Networks';
+    }
     if (lower.contains('synology') || lower.contains('qnap')) {
-      return 'NAS Storage Provider';
+      return 'NAS Storage System';
     }
     if (lower.contains('sonos')) {
-      return 'Sonos Sound';
+      return 'Sonos Audio';
     }
     if (lower.contains('philips') || lower.contains('hue')) {
-      return 'Philips Hue';
+      return 'Philips Hue Smart Lighting';
     }
     if (lower.contains('xiaomi') || lower.contains('mi')) {
       return 'Xiaomi';
+    }
+    if (lower.contains('hikvision')) {
+      return 'Hikvision Digital';
+    }
+    if (lower.contains('dahua')) {
+      return 'Dahua Technology';
+    }
+    if (lower.contains('reolink')) {
+      return 'Reolink Security';
+    }
+    if (lower.contains('wyze')) {
+      return 'Wyze Labs';
+    }
+    if (lower.contains('epson')) {
+      return 'Epson';
+    }
+    if (lower.contains('brother')) {
+      return 'Brother Industries';
+    }
+    if (lower.contains('canon')) {
+      return 'Canon';
+    }
+    if (lower.contains('hp') || lower.contains('hewlett')) {
+      return 'HP Inc.';
+    }
+    if (lower.contains('raspberry')) {
+      return 'Raspberry Pi Foundation';
     }
 
     return 'Network Connected Device';

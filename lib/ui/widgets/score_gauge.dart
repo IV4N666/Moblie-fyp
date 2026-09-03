@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/security_model.dart';
 
 class ScoreGauge extends StatelessWidget {
   final int score;
@@ -11,22 +12,30 @@ class ScoreGauge extends StatelessWidget {
   });
 
   Color _getScoreColor(int s) {
-    if (s >= 85) return const Color(0xFF2E7D32); // Deep Green
-    if (s >= 70) return const Color(0xFF689F38); // Light Green
-    if (s >= 50) return const Color(0xFFF57C00); // Orange
-    return const Color(0xFFD32F2F);              // Red
+    if (s >= 90) return const Color(0xFF2D6A4F); // Soft Forest Green
+    if (s >= 75) return const Color(0xFF52796F); // Gentle Muted Sage
+    if (s >= 60) return const Color(0xFFC88A2E); // Warm Honey Amber
+    if (s >= 40) return const Color(0xFFD97706); // Warm Terracotta Cinnamon
+    return const Color(0xFFC53030);              // Soft Brick Rose
+  }
+
+  Color _getScoreBgColor(int s) {
+    if (s >= 90) return const Color(0xFFE8F5E9);
+    if (s >= 75) return const Color(0xFFE0F2F1);
+    if (s >= 60) return const Color(0xFFFFF8E1);
+    if (s >= 40) return const Color(0xFFFFF3E0);
+    return const Color(0xFFFFEBEE);
   }
 
   String _getScoreLabel(int s) {
-    if (s >= 85) return 'Protected & Safe';
-    if (s >= 70) return 'Minor Tweaks';
-    if (s >= 50) return 'Needs Attention';
-    return 'Action Required';
+    final tier = SecurityTierExtension.fromScore(s);
+    return tier.displayName;
   }
 
   @override
   Widget build(BuildContext context) {
     final color = _getScoreColor(score);
+    final bgColor = _getScoreBgColor(score);
     final label = _getScoreLabel(score);
 
     return SizedBox(
@@ -35,20 +44,20 @@ class ScoreGauge extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Background track
+          // Background soft track
           SizedBox(
             width: size,
             height: size,
             child: CircularProgressIndicator(
               value: 1.0,
-              strokeWidth: 14,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey.shade200),
+              strokeWidth: 12,
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFEFEBE9)),
             ),
           ),
-          // Score progress arc
+          // Score progress arc with smooth rounded cap
           TweenAnimationBuilder<double>(
             tween: Tween<double>(begin: 0.0, end: score / 100.0),
-            duration: const Duration(milliseconds: 1200),
+            duration: const Duration(milliseconds: 1100),
             curve: Curves.easeOutCubic,
             builder: (context, value, child) {
               return SizedBox(
@@ -56,14 +65,14 @@ class ScoreGauge extends StatelessWidget {
                 height: size,
                 child: CircularProgressIndicator(
                   value: value,
-                  strokeWidth: 14,
+                  strokeWidth: 12,
                   strokeCap: StrokeCap.round,
                   valueColor: AlwaysStoppedAnimation<Color>(color),
                 ),
               );
             },
           ),
-          // Inner score text
+          // Inner score display
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -72,31 +81,34 @@ class ScoreGauge extends StatelessWidget {
                 style: TextStyle(
                   fontSize: size * 0.28,
                   fontWeight: FontWeight.w900,
-                  color: color,
+                  color: const Color(0xFF4E342E), // Warm deep mocha
                   height: 1.0,
+                  letterSpacing: -1.0,
                 ),
               ),
               Text(
-                '/ 100',
+                'out of 100',
                 style: TextStyle(
-                  fontSize: size * 0.09,
+                  fontSize: size * 0.075,
                   fontWeight: FontWeight.w500,
-                  color: Colors.grey.shade600,
+                  color: const Color(0xFF8D6E63), // Soft warm brown
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: color.withOpacity(0.3), width: 1.2),
                 ),
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontSize: size * 0.075,
+                    fontSize: size * 0.07,
                     fontWeight: FontWeight.bold,
                     color: color,
+                    letterSpacing: 0.4,
                   ),
                 ),
               ),

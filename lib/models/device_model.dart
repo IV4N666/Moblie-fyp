@@ -23,32 +23,57 @@ class PortInfo {
     required this.isSecure,
     required this.description,
   });
+
+  PortInfo copyWith({
+    int? port,
+    String? serviceName,
+    bool? isSecure,
+    String? description,
+  }) {
+    return PortInfo(
+      port: port ?? this.port,
+      serviceName: serviceName ?? this.serviceName,
+      isSecure: isSecure ?? this.isSecure,
+      description: description ?? this.description,
+    );
+  }
 }
 
 class DiscoveredDevice {
   final String ip;
   final String? macAddress;
   final String hostname;
+  final String? customAlias;
   final String vendor;
   final DeviceCategory category;
   final List<PortInfo> openPorts;
   final List<SecurityVulnerability> vulnerabilities;
   final int responseTimeMs;
   final DateTime firstSeen;
+  final bool isTrusted;
 
   DiscoveredDevice({
     required this.ip,
     this.macAddress,
     this.hostname = 'Unknown Device',
+    this.customAlias,
     this.vendor = 'Generic Device',
     this.category = DeviceCategory.unknown,
     required this.openPorts,
     required this.vulnerabilities,
     this.responseTimeMs = 0,
     DateTime? firstSeen,
+    this.isTrusted = false,
   }) : firstSeen = firstSeen ?? DateTime.now();
 
   bool get hasIssues => vulnerabilities.isNotEmpty;
+
+  String get displayName {
+    if (customAlias != null && customAlias!.trim().isNotEmpty) {
+      return customAlias!;
+    }
+    return hostname.isNotEmpty ? hostname : 'Device at $ip';
+  }
 
   int get riskScoreDeduction {
     return vulnerabilities.fold(0, (sum, item) => sum + item.penaltyPoints);
@@ -73,5 +98,33 @@ class DiscoveredDevice {
       case DeviceCategory.unknown:
         return 'Unidentified Device';
     }
+  }
+
+  DiscoveredDevice copyWith({
+    String? ip,
+    String? macAddress,
+    String? hostname,
+    String? customAlias,
+    String? vendor,
+    DeviceCategory? category,
+    List<PortInfo>? openPorts,
+    List<SecurityVulnerability>? vulnerabilities,
+    int? responseTimeMs,
+    DateTime? firstSeen,
+    bool? isTrusted,
+  }) {
+    return DiscoveredDevice(
+      ip: ip ?? this.ip,
+      macAddress: macAddress ?? this.macAddress,
+      hostname: hostname ?? this.hostname,
+      customAlias: customAlias ?? this.customAlias,
+      vendor: vendor ?? this.vendor,
+      category: category ?? this.category,
+      openPorts: openPorts ?? List.from(this.openPorts),
+      vulnerabilities: vulnerabilities ?? List.from(this.vulnerabilities),
+      responseTimeMs: responseTimeMs ?? this.responseTimeMs,
+      firstSeen: firstSeen ?? this.firstSeen,
+      isTrusted: isTrusted ?? this.isTrusted,
+    );
   }
 }

@@ -1,6 +1,6 @@
 # 🛡️ Wi-Fi Security Guardian
 
-A standalone, non-technical friendly mobile application built with Flutter that detects all connected devices on your local Wi-Fi, computes a transparent **0–100 Security Hygiene Score**, identifies vulnerable open services, and provides **plain-English step-by-step remediation checklists**.
+A standalone, non-technical friendly mobile application built with Flutter that detects all connected devices on your local Wi-Fi, computes a transparent **0–100 Security Hygiene Score**, identifies vulnerable open services, and provides **plain-English step-by-step interactive remediation checklists** and **exportable audit reports**.
 
 ---
 
@@ -12,24 +12,44 @@ A standalone, non-technical friendly mobile application built with Flutter that 
 
 2. **Full Device Discovery & Categorization:**
    - Discovers gateways/routers, smartphones, laptops, smart TVs, IoT sensors, network printers, and IP security cameras.
-   - Real-time response latency measurement (ms).
+   - Real-time response latency measurement (ms), vendor detection heuristics, and reverse DNS.
 
-3. **0–100 Security Score Gauge:**
+3. **0–100 Security Score Gauge & Health Trend:**
    - Color-coded security rating:
      - 🟢 **85–100**: Protected & Safe
      - 🟡 **70–84**: Minor Tweaks
      - 🟠 **50–69**: Needs Attention
      - 🔴 **0–49**: High Risk / Action Required
+   - Historical audit tracking: displays score improvement trends between scans.
 
-4. **Plain-English Vulnerability & Fix Guides:**
+4. **Expanded Vulnerability Knowledge Base & Interactive Fix Guides:**
    - **Telnet (Port 23):** Why unencrypted credentials are a danger + 3-step fix to switch to SSH.
-   - **FTP (Port 21):** Plaintext file transfer risks + how to enforce SFTP.
-   - **HTTP Router Portal (Port 80/8080):** How to enable HTTPS redirection on your router.
-   - **Exposed RTSP Camera Streams (Port 554):** How to isolate cameras onto a Guest Wi-Fi network.
+   - **Mirai / IoT Alternate Telnet (Port 2323):** Backdoor console mitigation for cheap smart cameras and DVRs.
+   - **Plaintext FTP (Port 21):** Plaintext file transfer risks + how to enforce SFTP/FTPS.
+   - **Exposed Camera Video Streams (Port 554):** RTSP credentials and isolating cameras onto Guest Wi-Fi.
+   - **UPnP / SSDP (Port 1900):** Preventing unauthorized firewall pinhole forwarding.
+   - **Unencrypted MQTT Broker (Port 1883):** Securing smart home sensor feeds with TLS authentication.
+   - **Remote Desktop / RDP (Port 3389):** Network Level Authentication (NLA) enforcement.
+   - **HTTP Router Portal (Port 80/8080):** Enforcing HTTPS redirection on administration panels.
    - **SMB (Port 445):** Guidance on disabling vulnerable legacy SMBv1 protocols.
+   - **RAW JetDirect Printing (Port 9100):** Restricting unauthenticated printer queues.
+   - **Interactive Checklists:** Tap checkable step-by-step boxes directly within vulnerability cards to track fix progress.
 
-5. **Wi-Fi Hardening Tips Screen:**
-   - Practical, non-technical advice for home Wi-Fi owners (Guest network isolation, WPA3 upgrades, disabling UPnP).
+5. **🎓 Viva / Presentation Demo Mode:**
+   - Built-in simulation toggle on the dashboard loads a realistic 8-device home network scenario (vulnerable camera, Telnet router, smart TV, IoT hub, and safe devices).
+   - Guarantees a seamless live demonstration for academic project presentations even if university Wi-Fi blocks LAN socket traffic (AP isolation).
+
+6. **📄 Security Audit Report Generation:**
+   - Generates a formatted, shareable Markdown and plain-text Network Audit Report containing the executive summary, connected device inventory table, risk breakdown, and prioritized action plan.
+   - One-tap "Copy Markdown" button to paste into project documentation or send to stakeholders.
+
+7. **Device Customization & Per-Host Re-Testing:**
+   - Assign friendly custom aliases (e.g. "Living Room TV") and toggle "Trusted Device" status.
+   - Single-device quick re-probe: verify if a patched port has closed without having to re-scan the entire 254-host subnet.
+
+8. **Search & Quick Filters:**
+   - Live search by device name, IP address, or manufacturer.
+   - Filter chips: `All`, `Risky`, `Safe`, `Routers`, `Cameras`, `Smart Home IoT`.
 
 ---
 
@@ -43,7 +63,7 @@ A standalone, non-technical friendly mobile application built with Flutter that 
 
 1. **Open the project folder:**
    ```bash
-   cd wifi_guardian_app
+   cd "Mobile FYP"
    ```
 
 2. **Fetch all dependencies:**
@@ -61,7 +81,7 @@ A standalone, non-technical friendly mobile application built with Flutter that 
 4. **Install on any Android phone:**
    - Transfer `app-release.apk` to your phone via USB, Google Drive, or email.
    - Tap the APK file on your phone and select **Install**.
-   - Open the app, connect to your home Wi-Fi, and tap **Scan Connected Devices**.
+   - Open the app, connect to your home Wi-Fi, and tap **Scan Connected Devices** (or tap the graduation cap icon for **Demo Mode**).
 
 ---
 
@@ -72,22 +92,25 @@ wifi_guardian_app/
 ├── lib/
 │   ├── main.dart                         # Material 3 entrypoint
 │   ├── models/
-│   │   ├── device_model.dart             # DiscoveredDevice, PortInfo, DeviceCategory
-│   │   └── security_model.dart           # SecurityVulnerability, RiskLevel, NetworkAuditResult
+│   │   ├── device_model.dart             # DiscoveredDevice, PortInfo, DeviceCategory, custom alias & trust
+│   │   └── security_model.dart           # SecurityVulnerability, RiskLevel, NetworkAuditResult, FixStep
 │   ├── services/
+│   │   ├── history_service.dart          # Audit history, score deltas, and device alias/trust store
 │   │   ├── network_info_service.dart     # Wi-Fi SSID, Subnet prefix & Gateway lookup
-│   │   ├── scanner_service.dart          # Concurrency-batched subnet socket sweeper
+│   │   ├── report_export_service.dart    # Professional Markdown/Text audit report generator
+│   │   ├── scanner_service.dart          # Concurrency-batched subnet socket sweeper, cancellation & demo generator
 │   │   ├── security_scoring_service.dart # Point-deduction evaluation engine (0-100)
-│   │   ├── vulnerability_db.dart         # Knowledge base with plain-English fix steps
-│   │   └── vendor_lookup_service.dart    # Device categorization heuristics
+│   │   ├── vendor_lookup_service.dart    # Device categorization & manufacturer heuristics
+│   │   └── vulnerability_db.dart         # Comprehensive knowledge base with plain-English fix steps
 │   └── ui/
 │       ├── screens/
-│       │   ├── dashboard_screen.dart     # Live scan gauge & device browser
-│       │   ├── device_detail_screen.dart # Detailed port & vulnerability inspections
+│       │   ├── dashboard_screen.dart     # Live scan gauge, demo mode, search, filter chips & device browser
+│       │   ├── device_detail_screen.dart # Detailed port & vulnerability inspections, rename, trust & live re-test
 │       │   └── security_tips_screen.dart # Educational home Wi-Fi hardening guides
 │       └── widgets/
-│           ├── score_gauge.dart          # Circular health score indicator
-│           └── vulnerability_card.dart   # Interactive remediation card
+│           ├── report_modal.dart         # Bottom sheet report viewer & one-tap markdown copy
+│           ├── score_gauge.dart          # Animated circular health score indicator
+│           └── vulnerability_card.dart   # Interactive remediation card with checkable fix steps
 ├── android/app/src/main/AndroidManifest.xml
 ├── ios/Runner/Info.plist
 └── pubspec.yaml

@@ -25,8 +25,14 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Backup custom AndroidManifest.xml
+        run: cp android/app/src/main/AndroidManifest.xml /tmp/AndroidManifest.xml
+
       - name: Scaffold Android platform files
         run: flutter create . --project-name wifi_guardian_app --org com.example --platforms=android --overwrite
+
+      - name: Restore custom AndroidManifest.xml
+        run: cp /tmp/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
