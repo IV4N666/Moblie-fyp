@@ -1,5 +1,6 @@
 import '../models/device_model.dart';
 import '../models/security_model.dart';
+import 'vulnerability_db.dart';
 
 class ReportExportService {
   /// Generates a comprehensive, professional Markdown Network Security Audit Report

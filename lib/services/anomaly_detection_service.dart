@@ -29,6 +29,7 @@ class DeviceAnomalyProfile {
   });
 
   bool get isSuspicious => anomalyScore >= 0.5;
+  bool get isAnomalous => anomalyScore >= 0.4;
 
   String get severityLabel {
     if (anomalyScore >= 0.75) return 'CRITICAL ANOMALY';

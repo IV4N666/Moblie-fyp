@@ -261,13 +261,21 @@ class AnomalyDetectionScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(
-                                    f,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: profile.isAnomalous
-                                          ? const Color(0xFF5D4037)
-                                          : Colors.grey.shade700,
+                                  child: RichText(
+                                    text: TextSpan(
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: profile.isAnomalous
+                                            ? const Color(0xFF5D4037)
+                                            : Colors.grey.shade700,
+                                      ),
+                                      children: [
+                                        TextSpan(
+                                          text: '${f.title}: ',
+                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                        TextSpan(text: f.description),
+                                      ],
                                     ),
                                   ),
                                 ),

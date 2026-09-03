@@ -137,16 +137,38 @@ class ScannerService {
   }
 
   /// Re-checks a single host specifically (used from Device Details)
-  Future<DiscoveredDevice?> recheckHost({
+  Future<DiscoveredDevice> recheckHost({
     required String ip,
-    required String gatewayIp,
-    required bool isLocalPhone,
+    String? mac,
+    String? hostname,
+    DeviceCategory? category,
+    String? vendor,
+    String gatewayIp = '192.168.1.1',
+    bool isLocalPhone = false,
   }) async {
-    return _probeHost(
+    final probed = await _probeHost(
       ip: ip,
       gatewayIp: gatewayIp,
       isLocalPhone: isLocalPhone,
       perPortTimeoutMs: 250,
+    );
+    if (probed != null) {
+      return probed.copyWith(
+        macAddress: mac,
+        hostname: hostname,
+        category: category,
+        vendor: vendor,
+      );
+    }
+    return DiscoveredDevice(
+      ip: ip,
+      macAddress: mac,
+      hostname: hostname ?? 'Unknown Device',
+      vendor: vendor ?? 'Generic Device',
+      category: category ?? DeviceCategory.unknown,
+      openPorts: const [],
+      vulnerabilities: const [],
+      responseTimeMs: 0,
     );
   }
 
