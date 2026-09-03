@@ -1,6 +1,18 @@
 # 🛡️ Wi-Fi Security Guardian
 
-A standalone, non-technical friendly mobile application built with Flutter that detects all connected devices on your local Wi-Fi, computes a transparent **0–100 Security Hygiene Score**, identifies vulnerable open services, and provides **plain-English step-by-step interactive remediation checklists** and **exportable audit reports**.
+A standalone, non-technical friendly mobile application built with Flutter that detects all connected devices on your local Wi-Fi, computes a transparent **0–100 Security Hygiene Score**, identifies vulnerable open services, and provides **plain-English step-by-step interactive remediation checklists**, **unsupervised AI behavioral anomaly detection**, and **exportable audit reports**.
+
+---
+
+## 📥 Quick Download & Installation (Android)
+
+| Official Release | Direct APK Download | Scan to Download (QR Code) |
+| :---: | :---: | :---: |
+| [![GitHub Release](https://img.shields.io/badge/Release-v1.0.0-2e7d32?style=for-the-badge&logo=github)](https://github.com/IV4N666/Moblie-fyp/releases/tag/v1.0.0) | [![Direct APK](https://img.shields.io/badge/Download-APK%20(21.2MB)-6D4C41?style=for-the-badge&logo=android)](https://github.com/IV4N666/Moblie-fyp/releases/download/v1.0.0/Wi-Fi-Security-Guardian-v1.0.0.apk) | <img src="download_qr_code.png" width="130" alt="Scan to Download APK"> |
+
+- **Direct Download Link:** [Wi-Fi-Security-Guardian-v1.0.0.apk](https://github.com/IV4N666/Moblie-fyp/releases/download/v1.0.0/Wi-Fi-Security-Guardian-v1.0.0.apk)
+- **Releases Page:** [GitHub Releases (v1.0.0)](https://github.com/IV4N666/Moblie-fyp/releases/tag/v1.0.0)
+- **Compatibility:** Android 7.0+ (ARM64真机、手机、平板及 64 位模拟器)
 
 ---
 
@@ -14,12 +26,13 @@ A standalone, non-technical friendly mobile application built with Flutter that 
    - Discovers gateways/routers, smartphones, laptops, smart TVs, IoT sensors, network printers, and IP security cameras.
    - Real-time response latency measurement (ms), vendor detection heuristics, and reverse DNS.
 
-3. **0–100 Security Score Gauge & Health Trend:**
-   - Color-coded security rating:
-     - 🟢 **85–100**: Protected & Safe
-     - 🟡 **70–84**: Minor Tweaks
-     - 🟠 **50–69**: Needs Attention
-     - 🔴 **0–49**: High Risk / Action Required
+3. **5-Tier Qualitative Risk Classification (Phase 1 Report Section 3.8):**
+   - Exact mathematical deduction matching Table 3.5 & Table 4.10:
+     - 🟢 **EXCELLENT (90–100)**: Protected & Optimal Security
+     - 🟢 **GOOD (75–89)**: Minor Configuration Tweaks Needed
+     - 🟡 **FAIR (60–74)**: Moderate Risk - Attention Recommended
+     - 🟠 **POOR (40–59)**: Elevated Risk - Remediation Required
+     - 🔴 **CRITICAL (0–39)**: Critical Threat Exposure - Immediate Action
    - Historical audit tracking: displays score improvement trends between scans.
 
 4. **Expanded Vulnerability Knowledge Base & Interactive Fix Guides:**
