@@ -1,5 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.wifi_guardian_app">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Normal Internet & Network inspection permissions -->
     <uses-permission android:name="android.permission.INTERNET" />

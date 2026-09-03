@@ -81,5 +81,7 @@ class HistoryService {
     }
   }
 
+  void setDeviceTrusted(String ip, bool isTrusted) => toggleDeviceTrust(ip, isTrusted);
+
   bool isDeviceTrusted(String ip) => _trustedIps.contains(ip);
 }
