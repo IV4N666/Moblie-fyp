@@ -437,7 +437,7 @@ class ExpertDashboardView extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) => DeviceDetailScreen(
                   device: dev,
-                  networkContext: networkContext,
+                  gatewayIp: networkContext?.gatewayIp,
                 ),
               ),
             ),
