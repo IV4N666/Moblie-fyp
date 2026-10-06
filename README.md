@@ -1,6 +1,6 @@
 # 🛡️ Wi-Fi Security Guardian
 
-A standalone, non-technical friendly mobile application built with Flutter that detects all connected devices on your local Wi-Fi, computes a transparent **0–100 Security Hygiene Score**, identifies vulnerable open services, and provides **plain-English step-by-step interactive remediation checklists**, **unsupervised AI behavioral anomaly detection**, and **exportable audit reports**.
+A standalone, non-technical friendly mobile application built with Flutter that detects all connected devices on your local Wi-Fi, computes a transparent **0–100 Security Hygiene Score**, identifies vulnerable open services, and provides **plain-English step-by-step interactive remediation checklists**, **Isolation Forest anomaly detection (unsupervised ML + expert rules)**, and **exportable audit reports**.
 
 ---
 
@@ -8,10 +8,10 @@ A standalone, non-technical friendly mobile application built with Flutter that 
 
 | Official Release | Direct APK Download | Scan to Download (QR Code) |
 | :---: | :---: | :---: |
-| [![GitHub Release](https://img.shields.io/badge/Release-v1.0.0-2e7d32?style=for-the-badge&logo=github)](https://github.com/IV4N666/Moblie-fyp/releases/tag/v1.0.0) | [![Direct APK](https://img.shields.io/badge/Download-APK%20(21.2MB)-6D4C41?style=for-the-badge&logo=android)](https://github.com/IV4N666/Moblie-fyp/releases/download/v1.0.0/Wi-Fi-Security-Guardian-v1.0.0.apk) | <img src="download_qr_code.png" width="130" alt="Scan to Download APK"> |
+| [![GitHub Release](https://img.shields.io/github/v/release/IV4N666/Moblie-fyp?style=for-the-badge&logo=github&color=2e7d32)](https://github.com/IV4N666/Moblie-fyp/releases/latest) | [![Download APK](https://img.shields.io/badge/Download-Latest%20APK-6D4C41?style=for-the-badge&logo=android)](https://github.com/IV4N666/Moblie-fyp/releases/latest) | <img src="download_qr_code.png" width="130" alt="Scan to Download APK"> |
 
-- **Direct Download Link:** [Wi-Fi-Security-Guardian-v1.0.0.apk](https://github.com/IV4N666/Moblie-fyp/releases/download/v1.0.0/Wi-Fi-Security-Guardian-v1.0.0.apk)
-- **Releases Page:** [GitHub Releases (v1.0.0)](https://github.com/IV4N666/Moblie-fyp/releases/tag/v1.0.0)
+- **Latest Release (APK attached):** [GitHub Releases – latest](https://github.com/IV4N666/Moblie-fyp/releases/latest)
+- Each push to `main` publishes a release named after `version:` in `pubspec.yaml`.
 - **Compatibility:** Android 7.0+ (ARM64真机、手机、平板及 64 位模拟器)
 
 ---
@@ -98,32 +98,44 @@ A standalone, non-technical friendly mobile application built with Flutter that 
 
 ---
 
+## 🧪 Running the Tests
+
+```
+flutter analyze
+flutter test
+```
+
+Unit tests cover the scoring formula, device classification, the Isolation Forest, report escaping and IP validation (`test/`). CI runs both before building the APK.
+
+---
+
 ## 📂 Project Architecture
 
 ```
 wifi_guardian_app/
 ├── lib/
-│   ├── main.dart                         # Material 3 entrypoint
+│   ├── main.dart                          # Entrypoint (loads saved history, Material 3 theme)
 │   ├── models/
-│   │   ├── device_model.dart             # DiscoveredDevice, PortInfo, DeviceCategory, custom alias & trust
-│   │   └── security_model.dart           # SecurityVulnerability, RiskLevel, NetworkAuditResult, FixStep
+│   │   ├── device_model.dart              # DiscoveredDevice, PortInfo, DeviceCategory, alias & trust
+│   │   └── security_model.dart            # SecurityVulnerability, RiskLevel, NetworkAuditResult, FixStep
 │   ├── services/
-│   │   ├── history_service.dart          # Audit history, score deltas, and device alias/trust store
-│   │   ├── network_info_service.dart     # Wi-Fi SSID, Subnet prefix & Gateway lookup
-│   │   ├── report_export_service.dart    # Professional Markdown/Text audit report generator
-│   │   ├── scanner_service.dart          # Concurrency-batched subnet socket sweeper, cancellation & demo generator
-│   │   ├── security_scoring_service.dart # Point-deduction evaluation engine (0-100)
-│   │   ├── vendor_lookup_service.dart    # Device categorization & manufacturer heuristics
-│   │   └── vulnerability_db.dart         # Comprehensive knowledge base with plain-English fix steps
+│   │   ├── anomaly_detection_service.dart # Isolation Forest + expert rules (hybrid anomaly score)
+│   │   ├── app_settings_service.dart      # Normal/Expert mode, scan timeout & concurrency
+│   │   ├── hidden_camera_service.dart     # Camera/video port signatures + active deep scan
+│   │   ├── history_service.dart           # Persistent audit history, aliases & trusted devices
+│   │   ├── isolation_forest.dart          # Dependency-free Isolation Forest (Liu et al., 2008)
+│   │   ├── network_info_service.dart      # Wi-Fi IP, SSID, real gateway, RFC 1918 checks
+│   │   ├── ping_service.dart              # TCP RTT, jitter & packet-loss diagnostics
+│   │   ├── report_export_service.dart     # Escaped Markdown & HTML audit reports
+│   │   ├── scanner_service.dart           # Worker-pool TCP sweep, SSDP/UPnP discovery, demo network
+│   │   ├── security_scoring_service.dart  # Device & network scores (average + weakest link)
+│   │   ├── socket_probe.dart              # TCP probe: open / closed (host alive) / filtered
+│   │   ├── vendor_lookup_service.dart     # Category & manufacturer heuristics (word matching)
+│   │   └── vulnerability_db.dart          # Knowledge base with plain-English fix steps
 │   └── ui/
-│       ├── screens/
-│       │   ├── dashboard_screen.dart     # Live scan gauge, demo mode, search, filter chips & device browser
-│       │   ├── device_detail_screen.dart # Detailed port & vulnerability inspections, rename, trust & live re-test
-│       │   └── security_tips_screen.dart # Educational home Wi-Fi hardening guides
-│       └── widgets/
-│           ├── report_modal.dart         # Bottom sheet report viewer & one-tap markdown copy
-│           ├── score_gauge.dart          # Animated circular health score indicator
-│           └── vulnerability_card.dart   # Interactive remediation card with checkable fix steps
+│       ├── screens/                       # Dashboard, expert view, device detail, tools
+│       └── widgets/                       # Report modal, score gauge, vulnerability card
+├── test/                                  # Unit tests (run with `flutter test`)
 ├── android/app/src/main/AndroidManifest.xml
 ├── ios/Runner/Info.plist
 └── pubspec.yaml

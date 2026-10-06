@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import '../models/device_model.dart';
 import '../models/security_model.dart';
+import 'socket_probe.dart';
 import 'vulnerability_db.dart';
 import 'vendor_lookup_service.dart';
 
@@ -23,26 +25,33 @@ class ScannerProgress {
   double get ratio => totalHosts == 0 ? 0 : completedHosts / totalHosts;
 }
 
+/// Internal result of probing one host.
+class _HostProbe {
+  final bool answered;
+  final DiscoveredDevice device;
+  const _HostProbe(this.answered, this.device);
+}
+
 class ScannerService {
-  // Probing ports for detection and security hygiene matching Phase 1 Table 3.5 & Table 4.10
+  // TCP ports probed on every host (Phase 1 Table 3.5 & Table 4.10).
+  //
+  // UDP-only services (TFTP 69, SNMP 161, mDNS 5353, CoAP 5683) were removed:
+  // Socket.connect() is TCP, so probing them could never detect anything and
+  // the report would silently under-count those risks. UPnP (UDP 1900) is
+  // detected properly with an SSDP M-SEARCH instead (see discoverUpnpHosts).
   static const List<int> probePorts = [
     21,    // FTP (Plaintext)
     22,    // SSH
     23,    // Telnet (Unencrypted)
-    69,    // TFTP
     80,    // HTTP Web
-    161,   // SNMP
     443,   // HTTPS Secure
     445,   // SMB File Sharing
     554,   // RTSP Video
     1883,  // MQTT Smart Home
-    1900,  // UPnP / SSDP
     2323,  // Mirai IoT Telnet
     3306,  // MySQL Database
     3389,  // RDP Remote Desktop
-    5353,  // mDNS / ZeroConf
     5432,  // PostgreSQL
-    5683,  // CoAP
     5900,  // VNC
     6379,  // Redis
     7000,  // AirPlay
@@ -51,185 +60,213 @@ class ScannerService {
     8888,  // HTTP-Alt
     9100,  // RAW Printer
     27017, // MongoDB
+    62078, // Apple iOS lockdown service (helps find iPhones/iPads)
   ];
 
+  static const Set<int> _encryptedPorts = {22, 443};
+
+  static const int defaultPortTimeoutMs = 300;
+  static const int defaultConcurrentHosts = 24;
+
   bool _isScanCancelled = false;
+
+  bool get isCancelled => _isScanCancelled;
 
   void cancelScan() {
     _isScanCancelled = true;
   }
 
-  /// Scans the entire /24 subnet using an async parallel worker pool
+  /// Scans the /24 subnet with a pool of [maxConcurrentHosts] workers.
+  ///
+  /// A host counts as present when ANY probed port is open *or actively
+  /// refused* (TCP RST). This finds phones, laptops and TVs that have no
+  /// open ports at all, which the previous "open port required" rule missed.
   Future<List<DiscoveredDevice>> scanSubnet({
     required String subnetPrefix,
     required String localIp,
     required String gatewayIp,
-    Function(ScannerProgress progress)? onProgress,
+    void Function(ScannerProgress progress)? onProgress,
+    int perPortTimeoutMs = defaultPortTimeoutMs,
+    int maxConcurrentHosts = defaultConcurrentHosts,
   }) async {
     _isScanCancelled = false;
-    final List<DiscoveredDevice> discovered = [];
-    const int totalHosts = 254;
-    int completed = 0;
+    final timeout = Duration(milliseconds: perPortTimeoutMs.clamp(50, 5000));
+    final workerCount = maxConcurrentHosts.clamp(1, 64);
 
-    // Concurrency batch size
-    const int batchSize = 25;
+    final targets = <String>[for (var i = 1; i <= 254; i++) '$subnetPrefix.$i'];
+    final discovered = <DiscoveredDevice>[];
+    var nextIndex = 0;
+    var completed = 0;
 
-    for (int batchStart = 1; batchStart <= totalHosts; batchStart += batchSize) {
-      if (_isScanCancelled) {
-        if (onProgress != null) {
-          onProgress(ScannerProgress(
-            completedHosts: completed,
-            totalHosts: totalHosts,
-            currentScanningIp: '$subnetPrefix.$completed',
-            devicesFound: discovered.length,
-            isCancelled: true,
-          ));
-        }
-        break;
-      }
+    // Runs in parallel with the TCP sweep; costs ~2 s of wall time at most.
+    final ssdpFuture = discoverUpnpHosts();
 
-      final int batchEnd = (batchStart + batchSize - 1 > totalHosts)
-          ? totalHosts
-          : batchStart + batchSize - 1;
-
-      final futures = <Future<DiscoveredDevice?>>[];
-
-      for (int i = batchStart; i <= batchEnd; i++) {
-        final ip = '$subnetPrefix.$i';
-        futures.add(_probeHost(
+    Future<void> worker() async {
+      while (!_isScanCancelled && nextIndex < targets.length) {
+        final ip = targets[nextIndex++];
+        final isLocal = ip == localIp;
+        final probe = await _probeHost(
           ip: ip,
           gatewayIp: gatewayIp,
-          isLocalPhone: (ip == localIp),
-        ));
-      }
-
-      final results = await Future.wait(futures);
-
-      for (var device in results) {
-        if (device != null) {
-          discovered.add(device);
+          isLocalPhone: isLocal,
+          timeout: timeout,
+        );
+        if (probe.answered || isLocal || ip == gatewayIp) {
+          discovered.add(probe.device);
         }
-      }
-
-      completed += (batchEnd - batchStart + 1);
-
-      if (onProgress != null) {
-        onProgress(ScannerProgress(
+        completed++;
+        onProgress?.call(ScannerProgress(
           completedHosts: completed,
-          totalHosts: totalHosts,
-          currentScanningIp: '$subnetPrefix.$batchEnd',
+          totalHosts: targets.length,
+          currentScanningIp: ip,
           devicesFound: discovered.length,
           isCancelled: _isScanCancelled,
         ));
       }
     }
 
-    // Sort: Gateway first, then vulnerable devices, then by IP
-    discovered.sort((a, b) {
-      if (a.category == DeviceCategory.gateway) return -1;
-      if (b.category == DeviceCategory.gateway) return 1;
-      if (a.hasIssues && !b.hasIssues) return -1;
-      if (!a.hasIssues && b.hasIssues) return 1;
-      return a.ip.compareTo(b.ip);
-    });
+    await Future.wait(List.generate(workerCount, (_) => worker()));
 
+    if (_isScanCancelled) {
+      onProgress?.call(ScannerProgress(
+        completedHosts: completed,
+        totalHosts: targets.length,
+        currentScanningIp: '',
+        devicesFound: discovered.length,
+        isCancelled: true,
+      ));
+    } else {
+      // Merge UPnP/SSDP answers: adds hosts that block every TCP probe but
+      // still announce themselves, and flags routers exposing UPnP IGD.
+      final upnpHosts = await ssdpFuture;
+      for (final entry in upnpHosts.entries) {
+        final ip = entry.key;
+        if (!ip.startsWith('$subnetPrefix.')) continue;
+        var index = discovered.indexWhere((d) => d.ip == ip);
+        if (index == -1) {
+          final probe = await _probeHost(
+            ip: ip,
+            gatewayIp: gatewayIp,
+            isLocalPhone: ip == localIp,
+            timeout: timeout,
+            forceResolveName: true,
+          );
+          discovered.add(probe.device);
+          index = discovered.length - 1;
+        }
+        discovered[index] =
+            _withSsdp(discovered[index], isInternetGateway: entry.value);
+      }
+    }
+
+    discovered.sort(compareDevices);
     return discovered;
   }
 
-  /// Re-checks a single host specifically (used from Device Details)
-  Future<DiscoveredDevice> recheckHost({
+  /// Gateway first, then devices with issues, then by numeric IP.
+  /// (Plain string comparison put .100 before .2.)
+  static int compareDevices(DiscoveredDevice a, DiscoveredDevice b) {
+    final aGateway = a.category == DeviceCategory.gateway ? 0 : 1;
+    final bGateway = b.category == DeviceCategory.gateway ? 0 : 1;
+    if (aGateway != bGateway) return aGateway - bGateway;
+    final aRisk = a.hasIssues ? 0 : 1;
+    final bRisk = b.hasIssues ? 0 : 1;
+    if (aRisk != bRisk) return aRisk - bRisk;
+    return _ipToInt(a.ip).compareTo(_ipToInt(b.ip));
+  }
+
+  static int _ipToInt(String ip) {
+    final parts = ip.split('.');
+    if (parts.length != 4) return 0;
+    var value = 0;
+    for (final p in parts) {
+      value = value * 256 + (int.tryParse(p) ?? 0);
+    }
+    return value;
+  }
+
+  /// Re-checks a single host (used from Device Details).
+  ///
+  /// Returns `null` when the host did not answer at all. The old version
+  /// returned a device with zero open ports in that case, so an offline
+  /// device was reported as "fully secured".
+  Future<DiscoveredDevice?> recheckHost({
     required String ip,
     String? mac,
     String? hostname,
     DeviceCategory? category,
     String? vendor,
-    String gatewayIp = '192.168.1.1',
+    String gatewayIp = '',
     bool isLocalPhone = false,
+    int perPortTimeoutMs = 500,
   }) async {
-    final probed = await _probeHost(
+    final ssdpFuture = discoverUpnpHosts();
+    final probe = await _probeHost(
       ip: ip,
       gatewayIp: gatewayIp,
       isLocalPhone: isLocalPhone,
-      perPortTimeoutMs: 250,
+      timeout: Duration(milliseconds: perPortTimeoutMs),
     );
-    if (probed != null) {
-      return probed.copyWith(
-        macAddress: mac,
-        hostname: hostname,
-        category: category,
-        vendor: vendor,
-      );
-    }
-    return DiscoveredDevice(
-      ip: ip,
+    final upnpHosts = await ssdpFuture;
+    final upnpAnswered = upnpHosts.containsKey(ip);
+
+    if (!probe.answered && !upnpAnswered && !isLocalPhone) return null;
+
+    var device = probe.device.copyWith(
       macAddress: mac,
-      hostname: hostname ?? 'Unknown Device',
-      vendor: vendor ?? 'Generic Device',
-      category: category ?? DeviceCategory.unknown,
-      openPorts: const [],
-      vulnerabilities: const [],
-      responseTimeMs: 0,
+      hostname: hostname,
+      category: category,
+      vendor: vendor,
     );
+    if (upnpAnswered) {
+      device = _withSsdp(device, isInternetGateway: upnpHosts[ip] ?? false);
+    }
+    return device;
   }
 
-  Future<DiscoveredDevice?> _probeHost({
+  Future<_HostProbe> _probeHost({
     required String ip,
     required String gatewayIp,
     required bool isLocalPhone,
-    int perPortTimeoutMs = 120,
+    required Duration timeout,
+    bool forceResolveName = false,
   }) async {
-    final stopwatch = Stopwatch()..start();
-    final List<PortInfo> openPorts = [];
-    final List<SecurityVulnerability> detectedVulns = [];
+    final results = await Future.wait(
+      probePorts.map((port) => SocketProbe.probe(ip, port, timeout)),
+    );
 
-    // Probe common ports with quick timeouts
-    await Future.wait(probePorts.map((port) async {
-      try {
-        final socket = await Socket.connect(
-          ip,
-          port,
-          timeout: Duration(milliseconds: perPortTimeoutMs),
-        );
+    final openPorts = <PortInfo>[];
+    final detectedVulns = <SecurityVulnerability>[];
+    var answered = false;
+    int? fastestReplyMs;
 
-        final isSecure = (port == 443 || port == 22);
-        final vuln = VulnerabilityDatabase.getVulnerabilityForPort(port);
-        if (vuln != null && vuln.penaltyPoints > 0) {
-          detectedVulns.add(vuln);
-        }
-
-        openPorts.add(PortInfo(
-          port: port,
-          serviceName: _getPortServiceName(port),
-          isSecure: isSecure,
-          description: _getPortDescription(port),
-        ));
-
-        socket.destroy();
-      } catch (_) {
-        // Closed / unreachable
+    for (final r in results) {
+      if (!r.hostAnswered) continue;
+      answered = true;
+      if (fastestReplyMs == null || r.elapsedMs < fastestReplyMs) {
+        fastestReplyMs = r.elapsedMs;
       }
-    }));
+      if (r.state != PortState.open) continue;
 
-    stopwatch.stop();
-
-    // If no ports open and not the local device or gateway, consider host inactive
-    if (openPorts.isEmpty && !isLocalPhone && ip != gatewayIp) {
-      return null;
+      openPorts.add(PortInfo(
+        port: r.port,
+        serviceName: _getPortServiceName(r.port),
+        isSecure: _encryptedPorts.contains(r.port),
+        description: _getPortDescription(r.port),
+      ));
+      final vuln = VulnerabilityDatabase.getVulnerabilityForPort(r.port);
+      if (vuln != null && vuln.penaltyPoints > 0) {
+        detectedVulns.add(vuln);
+      }
     }
 
-    // Attempt reverse hostname resolution
+    final isGateway = ip == gatewayIp;
     String hostname = 'Unknown Device';
-    try {
-      final hostLookup = await InternetAddress(ip).reverse().timeout(
-            const Duration(milliseconds: 150),
-          );
-      hostname = hostLookup.host;
-    } catch (_) {
-      if (isLocalPhone) {
-        hostname = 'This Mobile Device';
-      } else if (ip == gatewayIp) {
-        hostname = 'Wi-Fi Gateway Router';
-      }
+    if (answered || isLocalPhone || isGateway || forceResolveName) {
+      hostname = await _reverseLookup(ip) ??
+          (isLocalPhone
+              ? 'This Mobile Device'
+              : (isGateway ? 'Wi-Fi Gateway Router' : 'Unknown Device'));
     }
 
     final category = isLocalPhone
@@ -243,15 +280,114 @@ class ScannerService {
 
     final vendor = VendorLookupService.inferVendor(hostname, ip, gatewayIp);
 
-    return DiscoveredDevice(
-      ip: ip,
-      hostname: hostname,
-      vendor: vendor,
-      category: category,
-      openPorts: openPorts,
-      vulnerabilities: detectedVulns,
-      responseTimeMs: stopwatch.elapsedMilliseconds,
+    return _HostProbe(
+      answered,
+      DiscoveredDevice(
+        ip: ip,
+        hostname: hostname,
+        vendor: vendor,
+        category: category,
+        openPorts: openPorts,
+        vulnerabilities: detectedVulns,
+        // Fastest TCP reply, not total probe time (which was always ~timeout).
+        responseTimeMs: fastestReplyMs ?? 0,
+      ),
     );
+  }
+
+  static Future<String?> _reverseLookup(String ip) async {
+    try {
+      final result = await InternetAddress(ip)
+          .reverse()
+          .timeout(const Duration(milliseconds: 600));
+      final host = result.host.trim();
+      if (host.isEmpty || host == ip) return null;
+      return host;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Sends an SSDP M-SEARCH (UDP multicast 239.255.255.250:1900) and returns
+  /// every responder's IP, mapped to `true` when it advertised a UPnP
+  /// Internet Gateway Device (the router feature that can open firewall
+  /// ports automatically).
+  ///
+  /// Responses are unicast back to our socket, so no Android multicast lock
+  /// is required. Networks with AP/client isolation simply return nothing.
+  static Future<Map<String, bool>> discoverUpnpHosts({
+    Duration listenFor = const Duration(seconds: 2),
+  }) async {
+    final responders = <String, bool>{};
+    RawDatagramSocket? socket;
+    StreamSubscription<RawSocketEvent>? subscription;
+    try {
+      final s = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      socket = s;
+      subscription = s.listen((event) {
+        if (event != RawSocketEvent.read) return;
+        final datagram = s.receive();
+        if (datagram == null) return;
+        final text = utf8.decode(datagram.data, allowMalformed: true);
+        final isIgd = text.contains('InternetGatewayDevice') ||
+            text.contains('WANIPConnection') ||
+            text.contains('WANPPPConnection');
+        final ip = datagram.address.address;
+        responders[ip] = (responders[ip] ?? false) || isIgd;
+      });
+
+      final request = utf8.encode(
+        'M-SEARCH * HTTP/1.1\r\n'
+        'HOST: 239.255.255.250:1900\r\n'
+        'MAN: "ssdp:discover"\r\n'
+        'MX: 1\r\n'
+        'ST: ssdp:all\r\n'
+        '\r\n',
+      );
+      final group = InternetAddress('239.255.255.250');
+      s.send(request, group, 1900);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      s.send(request, group, 1900); // UDP is lossy: send twice.
+
+      await Future<void>.delayed(listenFor);
+    } catch (_) {
+      // Multicast blocked or no Wi-Fi: treat as "no UPnP responders".
+    } finally {
+      await subscription?.cancel();
+      socket?.close();
+    }
+    return responders;
+  }
+
+  static DiscoveredDevice _withSsdp(
+    DiscoveredDevice device, {
+    required bool isInternetGateway,
+  }) {
+    if (device.openPorts.any((p) => p.port == 1900)) return device;
+
+    final ports = [
+      ...device.openPorts,
+      PortInfo(
+        port: 1900,
+        serviceName: isInternetGateway
+            ? 'UPnP Internet Gateway (UDP 1900)'
+            : 'UPnP / SSDP Discovery (UDP 1900)',
+        isSecure: !isInternetGateway,
+        description: isInternetGateway
+            ? 'UPnP service capable of automatically opening router firewall ports.'
+            : 'Announces itself to other devices on the network. Normal for TVs, speakers and media players.',
+      ),
+    ];
+
+    final vulns = [...device.vulnerabilities];
+    final upnpVuln = VulnerabilityDatabase.getVulnerabilityForPort(1900);
+    if (isInternetGateway &&
+        upnpVuln != null &&
+        !vulns.any((v) => v.id == upnpVuln.id)) {
+      vulns.add(upnpVuln);
+    }
+
+    return device.copyWith(openPorts: ports, vulnerabilities: vulns);
   }
 
   String _getPortServiceName(int port) {
@@ -306,6 +442,8 @@ class ScannerService {
         return 'RAW JetDirect (Network Printer)';
       case 27017:
         return 'MongoDB (NoSQL Database)';
+      case 62078:
+        return 'Apple Device Sync (iOS lockdown)';
       default:
         return 'Port $port';
     }
@@ -363,6 +501,8 @@ class ScannerService {
         return 'Unauthenticated direct network printing queue.';
       case 27017:
         return 'Direct NoSQL document database listening on local network.';
+      case 62078:
+        return 'Wi-Fi sync service found on iPhones and iPads. Normal for Apple devices.';
       default:
         return 'Network service.';
     }

@@ -1,5 +1,5 @@
-import 'dart:io';
 import '../models/device_model.dart';
+import 'socket_probe.dart';
 
 enum CameraRiskLevel { safe, warning, critical }
 
@@ -31,103 +31,161 @@ class HiddenCameraScanReport {
   final DateTime timestamp;
   final bool hasHiddenCameras;
 
+  /// True when the camera ports were actively probed on every device
+  /// (deep scan), not just read from the main scan's inventory.
+  final bool wasDeepScan;
+
   const HiddenCameraScanReport({
     required this.totalScanned,
     required this.detectedCameras,
     required this.timestamp,
     required this.hasHiddenCameras,
+    this.wasDeepScan = false,
   });
 
   int get streamCount => detectedCameras.length;
 }
 
-class HiddenCameraService {
-  static const List<int> surveillancePorts = [
-    554,   // RTSP Default Video Stream
-    8554,  // RTSP Alternative
-    8000,  // Hikvision Media Port
-    37777, // Dahua Private Video Protocol
-    1935,  // RTMP Streaming
-    8081,  // Motion JPEG / WebCam Stream
-  ];
+class _CameraSignature {
+  final String protocolName;
+  final String? defaultVendor;
+  final CameraRiskLevel riskLevel;
+  final String riskExplanation;
+  final List<String> remediationSteps;
 
-  /// Analyzes discovered devices from the subnet scan to isolate all video surveillance equipment.
-  static HiddenCameraScanReport analyzeFromInventory(List<DiscoveredDevice> devices) {
-    final List<DetectedCamera> cameras = [];
+  const _CameraSignature({
+    required this.protocolName,
+    this.defaultVendor,
+    required this.riskLevel,
+    required this.riskExplanation,
+    required this.remediationSteps,
+  });
+}
+
+class HiddenCameraService {
+  /// Video/surveillance ports. Only 554 is part of the main subnet scan;
+  /// the others are checked by [deepScan]. Previously 37777 and 8000 were
+  /// "checked" in the inventory but never probed, so they could never match.
+  static const Map<int, _CameraSignature> _signatures = {
+    554: _CameraSignature(
+      protocolName: 'RTSP (Real-Time Streaming Protocol)',
+      riskLevel: CameraRiskLevel.critical,
+      riskExplanation:
+          'Active RTSP video service detected. Many IoT cameras stream live audio and video without a password.',
+      remediationSteps: [
+        'Open the camera app or admin page and set a strong password for RTSP streams.',
+        'Move this camera to a Guest Wi-Fi or separate network so other devices cannot reach the video feed.',
+        'Turn off UPnP and port forwarding on your router so the camera is not exposed to the Internet.',
+      ],
+    ),
+    8554: _CameraSignature(
+      protocolName: 'RTSP (alternate port 8554)',
+      riskLevel: CameraRiskLevel.critical,
+      riskExplanation:
+          'RTSP video service on an alternate port. Often used by budget cameras and DIY camera software.',
+      remediationSteps: [
+        'Require a password for the video stream in the camera settings.',
+        'Move the camera to a Guest Wi-Fi or separate network.',
+      ],
+    ),
+    37777: _CameraSignature(
+      protocolName: 'Dahua Private DVR/NVR Stream',
+      defaultVendor: 'Dahua Surveillance Technology',
+      riskLevel: CameraRiskLevel.critical,
+      riskExplanation:
+          'Proprietary surveillance protocol port open. In a rental room, this device may be recording continuously.',
+      remediationSteps: [
+        'If you are staying in a rental, ask the host where this device is and what it records.',
+        'If it is your device, replace the default admin password.',
+        'Block Internet (WAN) access to port 37777 in the router.',
+      ],
+    ),
+    8000: _CameraSignature(
+      protocolName: 'Hikvision SDK/Media Port',
+      defaultVendor: 'Hikvision Digital Technology',
+      riskLevel: CameraRiskLevel.warning,
+      riskExplanation:
+          'Hikvision service port detected. Older firmware had flaws that let anyone fetch snapshots without logging in. (Port 8000 is also used by some developer tools.)',
+      remediationSteps: [
+        'Update the camera firmware to the latest version.',
+        'Allow access to the camera only from devices you trust.',
+      ],
+    ),
+    1935: _CameraSignature(
+      protocolName: 'RTMP Live Streaming',
+      riskLevel: CameraRiskLevel.warning,
+      riskExplanation:
+          'Live video streaming service detected. Common on cameras and baby monitors that stream to a cloud service.',
+      remediationSteps: [
+        'Check which device this is and whether live streaming is expected.',
+        'Turn on two-factor authentication in the camera\'s cloud app.',
+      ],
+    ),
+    8081: _CameraSignature(
+      protocolName: 'MJPEG / Webcam HTTP Stream',
+      riskLevel: CameraRiskLevel.warning,
+      riskExplanation:
+          'Port often used by webcam software (motion, IP Webcam apps) to serve a live picture over plain HTTP.',
+      remediationSteps: [
+        'Open http://<device-ip>:8081 to see what is being served.',
+        'Set a password in the webcam software, or turn the stream off when not needed.',
+      ],
+    ),
+  };
+
+  static List<int> get surveillancePorts => _signatures.keys.toList();
+
+  static bool _isGenericVendor(String vendor) =>
+      vendor.contains('Generic') || vendor == 'Network Connected Device';
+
+  /// Builds the camera report from the scan inventory, plus any extra open
+  /// ports found by [deepScan] ([extraOpenPorts]: ip -> open camera ports).
+  static HiddenCameraScanReport analyzeFromInventory(
+    List<DiscoveredDevice> devices, {
+    Map<String, Set<int>> extraOpenPorts = const {},
+    bool wasDeepScan = false,
+  }) {
+    final cameras = <DetectedCamera>[];
 
     for (final dev in devices) {
-      final openPortSet = dev.openPorts.map((p) => p.port).toSet();
+      final openPortSet = <int>{
+        ...dev.openPorts.map((p) => p.port),
+        ...?extraOpenPorts[dev.ip],
+      };
 
-      // Check 1: RTSP Default stream (Port 554)
-      if (openPortSet.contains(554)) {
+      var matched = false;
+      for (final entry in _signatures.entries) {
+        if (!openPortSet.contains(entry.key)) continue;
+        final sig = entry.value;
+        matched = true;
+        cameras.add(DetectedCamera(
+          ip: dev.ip,
+          displayName: dev.displayName,
+          vendor: (sig.defaultVendor != null && _isGenericVendor(dev.vendor))
+              ? sig.defaultVendor!
+              : dev.vendor,
+          port: entry.key,
+          protocolName: sig.protocolName,
+          riskLevel: sig.riskLevel,
+          riskExplanation: sig.riskExplanation,
+          remediationSteps: sig.remediationSteps,
+        ));
+      }
+
+      // Identified as a camera by name/vendor, but no video port seen.
+      if (!matched && dev.category == DeviceCategory.smartCamera) {
         cameras.add(DetectedCamera(
           ip: dev.ip,
           displayName: dev.displayName,
           vendor: dev.vendor,
-          port: 554,
-          protocolName: 'RTSP (Real-Time Streaming Protocol)',
-          riskLevel: CameraRiskLevel.critical,
-          riskExplanation:
-              'Active RTSP broadcast detected. Many IoT cameras stream live audio and video feeds without password authentication.',
-          remediationSteps: [
-            'Check camera administration dashboard to enforce a strong WPA3/Digest password on RTSP streams.',
-            'Isolate this camera to an isolated VLAN or Guest Wi-Fi so local devices cannot tap the video feed.',
-            'Disable UPnP and port forwarding on your router to avoid exposing this camera to the public Internet.',
-          ],
-        ));
-      }
-
-      // Check 2: Dahua Private Surveillance (Port 37777)
-      if (openPortSet.contains(37777)) {
-        cameras.add(DetectedCamera(
-          ip: dev.ip,
-          displayName: dev.displayName,
-          vendor: dev.vendor.contains('Generic') ? 'Dahua Surveillance Technology' : dev.vendor,
-          port: 37777,
-          protocolName: 'Dahua Private DVR/NVR Stream',
-          riskLevel: CameraRiskLevel.critical,
-          riskExplanation:
-              'Proprietary surveillance protocol port open. If placed in an Airbnb or rental room, this device may record continuously.',
-          remediationSteps: [
-            'Verify device ownership with property hosts if staying in a rental accommodation.',
-            'Ensure default admin/admin credentials have been replaced.',
-            'Block WAN access on port 37777 in firewall settings.',
-          ],
-        ));
-      }
-
-      // Check 3: Hikvision Media Management (Port 8000)
-      if (openPortSet.contains(8000)) {
-        cameras.add(DetectedCamera(
-          ip: dev.ip,
-          displayName: dev.displayName,
-          vendor: dev.vendor.contains('Generic') ? 'Hikvision Digital Technology' : dev.vendor,
-          port: 8000,
-          protocolName: 'Hikvision SDK/Media Port',
-          riskLevel: CameraRiskLevel.warning,
-          riskExplanation:
-              'Hikvision service port detected. Known legacy firmware vulnerabilities have allowed unauthenticated remote snapshot retrieval.',
-          remediationSteps: [
-            'Update camera firmware to the latest security patch.',
-            'Enforce IP whitelist filtering on the camera switch port.',
-          ],
-        ));
-      }
-
-      // Check 4: General Category heuristic or vendor
-      if (dev.category == DeviceCategory.smartCamera && cameras.every((c) => c.ip != dev.ip)) {
-        cameras.add(DetectedCamera(
-          ip: dev.ip,
-          displayName: dev.displayName,
-          vendor: dev.vendor,
-          port: dev.openPorts.isNotEmpty ? dev.openPorts.first.port : 80,
+          port: dev.openPorts.isNotEmpty ? dev.openPorts.first.port : 0,
           protocolName: 'Smart Security Camera Interface',
           riskLevel: CameraRiskLevel.warning,
           riskExplanation:
-              'Identified as a surveillance camera via vendor/mDNS signatures. Ensure private physical spaces are not monitored without consent.',
-          remediationSteps: [
-            'Ensure 2-Factor Authentication (2FA) is enabled on the cloud camera app (Tapo, Ring, Wyze, Eufy).',
-            'Cover camera lens physically when privacy is expected.',
+              'Identified as a camera from its network name or services. Make sure private spaces are not being recorded without consent.',
+          remediationSteps: const [
+            'Turn on two-factor authentication (2FA) in the camera\'s cloud app (Tapo, Ring, Wyze, Eufy).',
+            'Cover the lens when privacy is expected.',
           ],
         ));
       }
@@ -138,25 +196,39 @@ class HiddenCameraService {
       detectedCameras: cameras,
       timestamp: DateTime.now(),
       hasHiddenCameras: cameras.isNotEmpty,
+      wasDeepScan: wasDeepScan,
     );
   }
 
-  /// Actively probes a specific IP address across all known camera streaming ports
-  static Future<List<int>> probeHostForCameraPorts(String ip, {int timeoutMs = 200}) async {
-    final openSurveillancePorts = <int>[];
-
-    await Future.wait(surveillancePorts.map((port) async {
-      try {
-        final socket = await Socket.connect(
-          ip,
-          port,
-          timeout: Duration(milliseconds: timeoutMs),
-        );
-        socket.destroy();
-        openSurveillancePorts.add(port);
-      } catch (_) {}
+  /// Actively probes every device for all surveillance ports, then builds
+  /// the report. (The old "deep scan" button only waited 600 ms and re-ran
+  /// the inventory analysis without touching the network.)
+  static Future<HiddenCameraScanReport> deepScan(
+    List<DiscoveredDevice> devices, {
+    int timeoutMs = 400,
+  }) async {
+    final extra = <String, Set<int>>{};
+    await Future.wait(devices.map((d) async {
+      extra[d.ip] =
+          (await probeHostForCameraPorts(d.ip, timeoutMs: timeoutMs)).toSet();
     }));
+    return analyzeFromInventory(
+      devices,
+      extraOpenPorts: extra,
+      wasDeepScan: true,
+    );
+  }
 
-    return openSurveillancePorts;
+  /// Probes one IP address across all known camera streaming ports.
+  static Future<List<int>> probeHostForCameraPorts(
+    String ip, {
+    int timeoutMs = 400,
+  }) async {
+    final results = await Future.wait(surveillancePorts.map((port) =>
+        SocketProbe.probe(ip, port, Duration(milliseconds: timeoutMs))));
+    return [
+      for (final r in results)
+        if (r.state == PortState.open) r.port,
+    ];
   }
 }

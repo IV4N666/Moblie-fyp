@@ -28,10 +28,14 @@ jobs:
           channel: 'stable'
           cache: true
 
+      # NOTE: running `flutter create --overwrite` on every build is fragile.
+      # Long term, run it once locally and commit the generated android/ folder.
       - name: Backup custom project files
         run: |
           cp pubspec.yaml /tmp/pubspec.yaml
+          cp analysis_options.yaml /tmp/analysis_options.yaml
           cp -r lib /tmp/lib_backup
+          cp -r test /tmp/test_backup
           cp android/app/src/main/AndroidManifest.xml /tmp/AndroidManifest.xml
 
       - name: Scaffold Android platform files
@@ -40,43 +44,60 @@ jobs:
       - name: Restore custom project files
         run: |
           cp /tmp/pubspec.yaml pubspec.yaml
-          rm -rf lib
+          cp /tmp/analysis_options.yaml analysis_options.yaml
+          rm -rf lib test
           cp -r /tmp/lib_backup lib
+          cp -r /tmp/test_backup test
           cp /tmp/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
 
+      # Fails the build on compile errors; lint infos/warnings are reported only.
+      - name: Static analysis
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Unit tests
+        run: flutter test
+
+      - name: Read app version from pubspec.yaml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//; s/\+.*//')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Build Android Release APK
         run: flutter build apk --release --no-tree-shake-icons
 
       - name: Rename APK for Release
-        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/Wi-Fi-Security-Guardian-v1.0.0.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/Wi-Fi-Security-Guardian-v${{ steps.version.outputs.version }}.apk"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Wi-Fi-Security-Guardian-APK
-          path: build/app/outputs/flutter-apk/Wi-Fi-Security-Guardian-v1.0.0.apk
+          path: build/app/outputs/flutter-apk/Wi-Fi-Security-Guardian-v${{ steps.version.outputs.version }}.apk
 
+      # The release tag now follows `version:` in pubspec.yaml, so each new
+      # version gets its own release instead of overwriting v1.0.0.
       - name: Auto Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v1.0.0
-          name: "Wi-Fi Security Guardian v1.0.0 (Release)"
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "Wi-Fi Security Guardian v${{ steps.version.outputs.version }}"
           body: |
-            ## 🛡️ Wi-Fi Security Guardian v1.0.0
+            ## 🛡️ Wi-Fi Security Guardian v${{ steps.version.outputs.version }}
             
             Standalone local network security assessment mobile application for Android.
             
             ### 🎓 Key Academic & Technical Capabilities:
             - **5-Tier Qualitative Risk Classification** (Excellent, Good, Fair, Poor, Critical)
             - **18 Curated IoT Vulnerabilities with Clear Fix Steps**
-            - **Unsupervised Behavioral Anomaly Detection**
+            - **Anomaly Detection (Isolation Forest + expert rules)**
             - **Academic Testbed Demo Mode** (Safe demonstration on any network)
             - **Standalone HTML & Markdown Audit Reports**
             
             ### 📱 Download & Install:
-            Click `Wi-Fi-Security-Guardian-v1.0.0.apk` below to download and install directly on any Android phone or 64-bit emulator.
-          files: build/app/outputs/flutter-apk/Wi-Fi-Security-Guardian-v1.0.0.apk
+            Click `Wi-Fi-Security-Guardian-v${{ steps.version.outputs.version }}.apk` below to download and install directly on any Android phone or 64-bit emulator.
+          files: build/app/outputs/flutter-apk/Wi-Fi-Security-Guardian-v${{ steps.version.outputs.version }}.apk

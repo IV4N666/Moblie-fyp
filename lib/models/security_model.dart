@@ -1,3 +1,5 @@
+import 'device_model.dart';
+
 enum RiskLevel {
   low,
   medium,
@@ -162,7 +164,7 @@ class NetworkAuditResult {
   final int overallScore;
   final SecurityTier tier;
   final DateTime scanTimestamp;
-  final List<dynamic> devices; // DiscoveredDevice instances
+  final List<DiscoveredDevice> devices;
   final List<SecurityVulnerability> allIssues;
 
   NetworkAuditResult({
@@ -179,6 +181,10 @@ class NetworkAuditResult {
 
   String get scoreHealthRating => tier.displayName;
   String get scoreDescription => tier.description;
+
+  /// Every finding on every device (allIssues is de-duplicated by type).
+  int get totalFindingCount =>
+      devices.fold(0, (sum, d) => sum + d.vulnerabilities.length);
 
   int get criticalIssueCount =>
       allIssues.where((i) => i.riskLevel == RiskLevel.critical).length;

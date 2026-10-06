@@ -15,6 +15,8 @@ class ExpertDashboardView extends StatelessWidget {
   final int overallScore;
   final SecurityTier tier;
   final VoidCallback onReScan;
+  final ValueChanged<DiscoveredDevice>? onDeviceUpdated;
+  final bool isDemoMode;
 
   const ExpertDashboardView({
     super.key,
@@ -23,7 +25,20 @@ class ExpertDashboardView extends StatelessWidget {
     required this.overallScore,
     required this.tier,
     required this.onReScan,
+    this.onDeviceUpdated,
+    this.isDemoMode = false,
   });
+
+  /// Quotes a CSV field and escapes embedded quotes. Also neutralises
+  /// spreadsheet formulas: device names come from the network, and a
+  /// device named "=HYPERLINK(...)" would otherwise run as a formula
+  /// when the CSV is opened in Excel or Google Sheets.
+  static String _csv(String? value) {
+    var v = value ?? '';
+    if (v.isNotEmpty && '=+-@'.contains(v[0])) v = "'$v";
+    final escaped = v.replaceAll('"', '""');
+    return '"$escaped"';
+  }
 
   static const Color primaryWarm = Color(0xFF6D4C41);
   static const Color backgroundWarm = Color(0xFFFAF8F5);
@@ -44,7 +59,7 @@ class ExpertDashboardView extends StatelessWidget {
     for (final dev in devices) {
       final openPortsStr = dev.openPorts.map((p) => p.port).join(';');
       buffer.writeln(
-        '${dev.ip},"${dev.displayName}","${dev.macAddress ?? "N/A"}","${dev.vendor}","${dev.categoryDisplayName}","$openPortsStr",-${dev.riskScoreDeduction},${dev.responseTimeMs}',
+        '${dev.ip},${_csv(dev.displayName)},${_csv(dev.macAddress ?? 'N/A')},${_csv(dev.vendor)},${_csv(dev.categoryDisplayName)},${_csv(openPortsStr)},-${dev.riskScoreDeduction},${dev.responseTimeMs}',
       );
     }
 
@@ -217,7 +232,7 @@ class ExpertDashboardView extends StatelessWidget {
                 context,
                 icon: Icons.psychology_rounded,
                 title: 'AI Anomalies',
-                subtitle: 'Unsupervised ML',
+                subtitle: 'Isolation Forest',
                 color: Colors.amber.shade900,
                 onTap: () => Navigator.push(
                   context,
@@ -438,6 +453,8 @@ class ExpertDashboardView extends StatelessWidget {
                 builder: (_) => DeviceDetailScreen(
                   device: dev,
                   gatewayIp: networkContext?.gatewayIp,
+                  isDemoMode: isDemoMode,
+                  onDeviceUpdated: onDeviceUpdated,
                 ),
               ),
             ),

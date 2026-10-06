@@ -1,183 +1,168 @@
 import '../models/device_model.dart';
 
+/// Keyword rule used for hostname matching.
+///
+/// Plain `contains()` caused false positives: "mike-laptop" was a Xiaomi
+/// ("mi"), "spring-pc" a Ring camera ("ring"), "honest-tv" a Nest camera.
+/// Short keywords are therefore matched against whole words in the hostname
+/// (split on '-', '.', '_' etc.), or only at the start/end of a word.
+class HostnameRule {
+  final List<String> substrings;
+  final List<String> words;
+  final List<String> wordPrefixes;
+  final List<String> wordSuffixes;
+
+  const HostnameRule({
+    this.substrings = const [],
+    this.words = const [],
+    this.wordPrefixes = const [],
+    this.wordSuffixes = const [],
+  });
+
+  bool matches(String hostname) {
+    final lower = hostname.toLowerCase();
+    if (substrings.any(lower.contains)) return true;
+    for (final w in VendorLookupService.tokenize(hostname)) {
+      if (words.contains(w)) return true;
+      if (wordPrefixes.any(w.startsWith)) return true;
+      if (wordSuffixes.any(w.endsWith)) return true;
+    }
+    return false;
+  }
+}
+
 class VendorLookupService {
-  /// Heuristically classifies the device and detects brand from IP position, open ports, and hostnames
+  /// "Galaxy-S23.lan" -> ["galaxy", "s23", "lan"]
+  static List<String> tokenize(String hostname) => hostname
+      .toLowerCase()
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((t) => t.isNotEmpty)
+      .toList();
+
+  static const _cameraNames = HostnameRule(
+    substrings: ['camera', 'dahua', 'hikvision', 'reolink', 'wyze', 'eufy', 'ezviz', 'imou', 'amcrest', 'foscam', 'arlo', 'ringdoorbell'],
+    words: ['ring', 'dvr', 'nvr'],
+    wordPrefixes: ['ipc'],
+    wordSuffixes: ['cam'],
+  );
+
+  static const _printerNames = HostnameRule(
+    substrings: ['printer', 'epson', 'canon', 'brother', 'xerox', 'laserjet', 'officejet', 'deskjet', 'kyocera', 'lexmark', 'ricoh'],
+    wordPrefixes: ['hp', 'npi'],
+  );
+
+  static const _mediaNames = HostnameRule(
+    substrings: ['roku', 'chromecast', 'appletv', 'apple-tv', 'bravia', 'firetv', 'fire-tv', 'shield', 'smarttv', 'androidtv', 'webos', 'tizen', 'sonos'],
+    words: ['tv'],
+    wordSuffixes: ['tv'],
+  );
+
+  static const _computerNames = HostnameRule(
+    substrings: ['macbook', 'imac', 'thinkpad', 'surface', 'workstation', 'vivobook', 'zenbook', 'ideapad'],
+    words: ['pc', 'dell'],
+    wordPrefixes: ['desktop', 'laptop'],
+  );
+
+  static const _mobileNames = HostnameRule(
+    wordPrefixes: ['iphone', 'ipad', 'android', 'galaxy', 'pixel', 'oneplus', 'redmi', 'oppo', 'vivo', 'poco'],
+  );
+
+  static const _iotNames = HostnameRule(
+    substrings: ['tuya', 'sonoff', 'tasmota', 'shelly', 'raspberry', 'homeassistant', 'wemo', 'kasa', 'smartthings', 'alexa', 'philips-hue'],
+    words: ['nest', 'hue', 'echo'],
+    wordPrefixes: ['esp'],
+  );
+
+  /// Heuristically classifies the device from the gateway address, open
+  /// ports and hostname. Strong port evidence is checked before hostnames.
   static DeviceCategory inferCategory({
     required String ip,
     required String? gatewayIp,
     required List<int> openPorts,
     required String hostname,
   }) {
-    final lowerHost = hostname.toLowerCase();
+    bool hasPort(List<int> ports) => ports.any(openPorts.contains);
 
-    // 1. Gateway Detection
-    if (ip == gatewayIp || ip.endsWith('.1') || ip.endsWith('.254')) {
+    // 1. Gateway: only the router address reported by the OS.
+    //    The old `ip.endsWith('.1')` also matched .11, .21, .101, .201 ...
+    if (gatewayIp != null && gatewayIp.isNotEmpty && ip == gatewayIp) {
       return DeviceCategory.gateway;
     }
 
-    // 2. Smart Cameras
-    if (openPorts.contains(554) ||
-        openPorts.contains(2323) ||
-        lowerHost.contains('cam') ||
-        lowerHost.contains('dahua') ||
-        lowerHost.contains('hikvision') ||
-        lowerHost.contains('reolink') ||
-        lowerHost.contains('wyze') ||
-        lowerHost.contains('eufy') ||
-        lowerHost.contains('ring') ||
-        lowerHost.contains('nest')) {
+    // 2. Smart cameras
+    if (hasPort(const [554, 2323]) || _cameraNames.matches(hostname)) {
       return DeviceCategory.smartCamera;
     }
 
-    // 3. Network Printers
-    if (openPorts.contains(515) ||
-        openPorts.contains(631) ||
-        openPorts.contains(9100) ||
-        lowerHost.contains('printer') ||
-        lowerHost.contains('epson') ||
-        lowerHost.contains('hp') ||
-        lowerHost.contains('canon') ||
-        lowerHost.contains('brother') ||
-        lowerHost.contains('xerox')) {
+    // 3. Network printers
+    if (hasPort(const [515, 631, 9100]) || _printerNames.matches(hostname)) {
       return DeviceCategory.printer;
     }
 
-    // 4. Smart TV / Media streaming
-    if (openPorts.contains(7000) ||
-        openPorts.contains(8008) ||
-        openPorts.contains(8009) ||
-        lowerHost.contains('tv') ||
-        lowerHost.contains('roku') ||
-        lowerHost.contains('chromecast') ||
-        lowerHost.contains('apple-tv') ||
-        lowerHost.contains('bravia') ||
-        lowerHost.contains('shield') ||
-        lowerHost.contains('firetv')) {
-      return DeviceCategory.entertainment;
-    }
-
-    // 5. Workstations / Computers
-    if (openPorts.contains(445) ||
-        openPorts.contains(3389) ||
-        openPorts.contains(22) ||
-        lowerHost.contains('macbook') ||
-        lowerHost.contains('pc') ||
-        lowerHost.contains('desktop') ||
-        lowerHost.contains('laptop') ||
-        lowerHost.contains('thinkpad') ||
-        lowerHost.contains('dell') ||
-        lowerHost.contains('surface')) {
-      return DeviceCategory.computer;
-    }
-
-    // 6. Mobile Devices
-    if (lowerHost.contains('iphone') ||
-        lowerHost.contains('ipad') ||
-        lowerHost.contains('android') ||
-        lowerHost.contains('galaxy') ||
-        lowerHost.contains('pixel') ||
-        lowerHost.contains('oneplus')) {
+    // 4. iPhones / iPads expose the lockdown sync service on 62078
+    if (hasPort(const [62078])) {
       return DeviceCategory.phoneOrTablet;
     }
 
-    // 7. Generic IoT / Smart Home
-    if (openPorts.contains(1883) ||
-        openPorts.contains(1900) ||
-        openPorts.contains(80) ||
-        openPorts.contains(8080) ||
-        lowerHost.contains('esp') ||
-        lowerHost.contains('tuya') ||
-        lowerHost.contains('sonoff') ||
-        lowerHost.contains('hue') ||
-        lowerHost.contains('tasmota') ||
-        lowerHost.contains('raspberry') ||
-        lowerHost.contains('homeassistant')) {
+    // 5. Smart TV / media streaming
+    if (hasPort(const [7000, 8008, 8009]) || _mediaNames.matches(hostname)) {
+      return DeviceCategory.entertainment;
+    }
+
+    // 6. Computers. SSH (22) alone is no longer treated as "computer":
+    //    routers, NAS boxes and Raspberry Pis expose it too.
+    if (hasPort(const [445, 3389, 5900]) || _computerNames.matches(hostname)) {
+      return DeviceCategory.computer;
+    }
+
+    // 7. Phones & tablets by name
+    if (_mobileNames.matches(hostname)) {
+      return DeviceCategory.phoneOrTablet;
+    }
+
+    // 8. Generic IoT / smart home
+    if (hasPort(const [1883, 80, 8080]) || _iotNames.matches(hostname)) {
       return DeviceCategory.iotDevice;
     }
 
     return DeviceCategory.unknown;
   }
 
-  /// Identifies manufacturer name from hostname cues, open ports, and IP
+  static const List<MapEntry<String, HostnameRule>> _vendorRules = [
+    MapEntry('Apple Inc.', HostnameRule(substrings: ['apple', 'macbook', 'imac'], wordPrefixes: ['iphone', 'ipad'])),
+    MapEntry('Samsung Electronics', HostnameRule(substrings: ['samsung'], wordPrefixes: ['galaxy'])),
+    MapEntry('Google LLC', HostnameRule(substrings: ['google', 'chromecast'], words: ['nest'], wordPrefixes: ['pixel'])),
+    MapEntry('Amazon', HostnameRule(substrings: ['amazon', 'kindle', 'firetv', 'fire-tv'], words: ['echo'])),
+    MapEntry('TP-Link Technologies', HostnameRule(substrings: ['tplink', 'tp-link', 'tapo', 'kasa'])),
+    MapEntry('ASUS', HostnameRule(substrings: ['asus', 'vivobook', 'zenbook'])),
+    MapEntry('NETGEAR', HostnameRule(substrings: ['netgear'])),
+    MapEntry('Ubiquiti Networks', HostnameRule(substrings: ['ubiquiti', 'unifi'])),
+    MapEntry('NAS Storage System', HostnameRule(substrings: ['synology', 'qnap'])),
+    MapEntry('Sonos Audio', HostnameRule(substrings: ['sonos'])),
+    MapEntry('Philips Hue Smart Lighting', HostnameRule(substrings: ['philips'], words: ['hue'])),
+    MapEntry('Xiaomi', HostnameRule(substrings: ['xiaomi', 'mijia'], words: ['mi'], wordPrefixes: ['redmi', 'poco'])),
+    MapEntry('Hikvision Digital', HostnameRule(substrings: ['hikvision'])),
+    MapEntry('Dahua Technology', HostnameRule(substrings: ['dahua'])),
+    MapEntry('Reolink Security', HostnameRule(substrings: ['reolink'])),
+    MapEntry('Wyze Labs', HostnameRule(substrings: ['wyze'])),
+    MapEntry('Epson', HostnameRule(substrings: ['epson'])),
+    MapEntry('Brother Industries', HostnameRule(substrings: ['brother'])),
+    MapEntry('Canon', HostnameRule(substrings: ['canon'])),
+    MapEntry('HP Inc.', HostnameRule(substrings: ['hewlett', 'laserjet', 'officejet', 'deskjet'], wordPrefixes: ['hp', 'npi'])),
+    MapEntry('Raspberry Pi Foundation', HostnameRule(substrings: ['raspberry'])),
+  ];
+
+  /// Identifies the manufacturer from hostname cues.
+  ///
+  /// Note: real MAC/OUI lookup is not possible on Android 10+ (the ARP table
+  /// is no longer readable by apps), so this stays a hostname heuristic.
   static String inferVendor(String hostname, String ip, String? gatewayIp) {
-    if (ip == gatewayIp || ip.endsWith('.1')) {
+    for (final rule in _vendorRules) {
+      if (rule.value.matches(hostname)) return rule.key;
+    }
+    if (gatewayIp != null && gatewayIp.isNotEmpty && ip == gatewayIp) {
       return 'Router / Network Gateway';
     }
-
-    final lower = hostname.toLowerCase();
-    if (lower.contains('apple') ||
-        lower.contains('iphone') ||
-        lower.contains('macbook') ||
-        lower.contains('ipad')) {
-      return 'Apple Inc.';
-    }
-    if (lower.contains('samsung') || lower.contains('galaxy')) {
-      return 'Samsung Electronics';
-    }
-    if (lower.contains('google') ||
-        lower.contains('pixel') ||
-        lower.contains('nest') ||
-        lower.contains('chromecast')) {
-      return 'Google LLC';
-    }
-    if (lower.contains('amazon') ||
-        lower.contains('echo') ||
-        lower.contains('kindle') ||
-        lower.contains('firetv')) {
-      return 'Amazon';
-    }
-    if (lower.contains('tplink') || lower.contains('tp-link')) {
-      return 'TP-Link Technologies';
-    }
-    if (lower.contains('asus')) {
-      return 'ASUS';
-    }
-    if (lower.contains('netgear')) {
-      return 'NETGEAR';
-    }
-    if (lower.contains('ubiquiti') || lower.contains('unifi')) {
-      return 'Ubiquiti Networks';
-    }
-    if (lower.contains('synology') || lower.contains('qnap')) {
-      return 'NAS Storage System';
-    }
-    if (lower.contains('sonos')) {
-      return 'Sonos Audio';
-    }
-    if (lower.contains('philips') || lower.contains('hue')) {
-      return 'Philips Hue Smart Lighting';
-    }
-    if (lower.contains('xiaomi') || lower.contains('mi')) {
-      return 'Xiaomi';
-    }
-    if (lower.contains('hikvision')) {
-      return 'Hikvision Digital';
-    }
-    if (lower.contains('dahua')) {
-      return 'Dahua Technology';
-    }
-    if (lower.contains('reolink')) {
-      return 'Reolink Security';
-    }
-    if (lower.contains('wyze')) {
-      return 'Wyze Labs';
-    }
-    if (lower.contains('epson')) {
-      return 'Epson';
-    }
-    if (lower.contains('brother')) {
-      return 'Brother Industries';
-    }
-    if (lower.contains('canon')) {
-      return 'Canon';
-    }
-    if (lower.contains('hp') || lower.contains('hewlett')) {
-      return 'HP Inc.';
-    }
-    if (lower.contains('raspberry')) {
-      return 'Raspberry Pi Foundation';
-    }
-
     return 'Network Connected Device';
   }
 }

@@ -1,8 +1,32 @@
+import 'dart:convert';
 import '../models/device_model.dart';
 import '../models/security_model.dart';
-import 'vulnerability_db.dart';
+import 'security_scoring_service.dart';
 
 class ReportExportService {
+  /// Escapes text for HTML. Hostnames come from reverse DNS, which any
+  /// device on the LAN controls: a device named `<script>...` would
+  /// otherwise inject script into the exported report (stored XSS).
+  static final _htmlEscape = const HtmlEscape().convert;
+
+  /// Keeps device names from breaking Markdown table rows, and stops raw
+  /// HTML in a device name from being rendered by Markdown viewers.
+  static String _md(String? text) => (text ?? '')
+      .replaceAll('|', r'\|')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll(RegExp(r'[\r\n]+'), ' ');
+
+  static String _h(String? text) => _htmlEscape(text ?? '');
+
+  /// The device-specific finding for [port], if any (falls back to "info").
+  static SecurityVulnerability? _findingFor(DiscoveredDevice dev, int port) {
+    for (final v in dev.vulnerabilities) {
+      if (v.affectedPort == port) return v;
+    }
+    return null;
+  }
+
   /// Generates a comprehensive, professional Markdown Network Security Audit Report
   static String generateMarkdownReport(NetworkAuditResult audit) {
     final buffer = StringBuffer();
@@ -11,7 +35,7 @@ class ReportExportService {
     buffer.writeln('# 🛡️ IoT Security Audit Report');
     buffer.writeln();
     buffer.writeln('**Generated on:** $dateStr');
-    buffer.writeln('**Target Network (SSID):** ${audit.wifiSsid ?? "Unknown"}');
+    buffer.writeln('**Target Network (SSID):** ${_md(audit.wifiSsid ?? "Unknown")}');
     buffer.writeln('**Subnet:** ${audit.subnet}.0/24');
     buffer.writeln('**Gateway Router IP:** ${audit.gatewayIp ?? "N/A"}');
     buffer.writeln('**Auditor Device IP:** ${audit.localIp}');
@@ -25,8 +49,8 @@ class ReportExportService {
     buffer.writeln('- **Overall Security Score:** **${audit.overallScore} / 100**');
     buffer.writeln('- **Risk Classification:** **${audit.scoreHealthRating}** (${audit.scoreDescription})');
     buffer.writeln('- **Total Devices Scanned:** ${audit.devices.length}');
-    buffer.writeln('- **Vulnerable Devices:** ${audit.devices.where((d) => (d as DiscoveredDevice).hasIssues).length}');
-    buffer.writeln('- **Total Open Vulnerabilities:** ${audit.allIssues.length}');
+    buffer.writeln('- **Vulnerable Devices:** ${audit.devices.where((d) => d.hasIssues).length}');
+    buffer.writeln('- **Total Findings:** ${audit.totalFindingCount} (${audit.allIssues.length} distinct issue types)');
     buffer.writeln('  - Critical Risks: ${audit.criticalIssueCount}');
     buffer.writeln('  - High Risks: ${audit.highIssueCount}');
     buffer.writeln('  - Medium Risks: ${audit.mediumIssueCount}');
@@ -42,12 +66,11 @@ class ReportExportService {
     buffer.writeln('| :--- | :--- | :--- | :--- | :--- | :--- |');
 
     int counter = 1;
-    for (final dev in audit.devices) {
-      final device = dev as DiscoveredDevice;
-      final devScore = (100 - device.riskScoreDeduction).clamp(0, 100);
+    for (final device in audit.devices) {
+      final devScore = SecurityScoringService.calculateDeviceScore(device);
       final tier = SecurityTierExtension.fromScore(devScore);
       final mac = device.macAddress ?? 'N/A';
-      buffer.writeln('| $counter | ${device.ip} | $mac | ${device.vendor} (${device.displayName}) | $devScore/100 | ${tier.displayName} |');
+      buffer.writeln('| $counter | ${device.ip} | ${_md(mac)} | ${_md(device.vendor)} (${_md(device.displayName)}) | $devScore/100 | ${tier.displayName} |');
       counter++;
     }
     buffer.writeln();
@@ -58,10 +81,7 @@ class ReportExportService {
     buffer.writeln('## 🔍 Detailed Device Assessments');
     buffer.writeln();
 
-    final riskyDevices = audit.devices
-        .where((d) => (d as DiscoveredDevice).hasIssues)
-        .cast<DiscoveredDevice>()
-        .toList();
+    final riskyDevices = audit.devices.where((d) => d.hasIssues).toList();
 
     if (riskyDevices.isEmpty) {
       buffer.writeln('🎉 **No security risks or unencrypted services were identified on your network!**');
@@ -69,10 +89,10 @@ class ReportExportService {
     } else {
       int itemCounter = 1;
       for (final device in riskyDevices) {
-        final devScore = (100 - device.riskScoreDeduction).clamp(0, 100);
+        final devScore = SecurityScoringService.calculateDeviceScore(device);
         final tier = SecurityTierExtension.fromScore(devScore);
 
-        buffer.writeln('### Device $itemCounter: ${device.ip} (${device.displayName})');
+        buffer.writeln('### Device $itemCounter: ${device.ip} (${_md(device.displayName)})');
         buffer.writeln('- **MAC Address:** ${device.macAddress ?? "Unknown"}');
         buffer.writeln('- **Manufacturer:** ${device.vendor}');
         buffer.writeln('- **Security Score:** **$devScore / 100**');
@@ -115,7 +135,7 @@ class ReportExportService {
   /// from the Phase 1 FYP Report with inline CSS and colored risk badges.
   static String generateHtmlReport(NetworkAuditResult audit) {
     final dateStr = audit.scanTimestamp.toLocal().toString().split('.')[0];
-    final devices = audit.devices.cast<DiscoveredDevice>().toList();
+    final devices = audit.devices;
 
     int excellentCount = 0;
     int goodCount = 0;
@@ -124,7 +144,7 @@ class ReportExportService {
     int criticalCount = 0;
 
     for (final d in devices) {
-      final s = (100 - d.riskScoreDeduction).clamp(0, 100);
+      final s = SecurityScoringService.calculateDeviceScore(d);
       if (s >= 90) excellentCount++;
       else if (s >= 75) goodCount++;
       else if (s >= 60) fairCount++;
@@ -174,7 +194,7 @@ class ReportExportService {
     // Header
     buffer.writeln('<div class="header">');
     buffer.writeln('<h1>🛡️ IoT Security Audit Report</h1>');
-    buffer.writeln('<p>Generated: $dateStr | Network: ${audit.wifiSsid ?? "Local Wi-Fi"} (${audit.subnet}.0/24)</p>');
+    buffer.writeln('<p>Generated: $dateStr | Network: ${_h(audit.wifiSsid ?? "Local Wi-Fi")} (${_h(audit.subnet)}.0/24)</p>');
     buffer.writeln('</div>');
 
     buffer.writeln('<div class="content">');
@@ -183,7 +203,7 @@ class ReportExportService {
     buffer.writeln('<h2>📊 Executive Summary</h2>');
     buffer.writeln('<table>');
     buffer.writeln('<tr><td><strong>Total Devices Scanned</strong></td><td>${devices.length}</td></tr>');
-    buffer.writeln('<tr><td><strong>Average Security Score</strong></td><td><strong>${audit.overallScore}/100 — ${audit.scoreHealthRating}</strong></td></tr>');
+    buffer.writeln('<tr><td><strong>Overall Security Score</strong></td><td><strong>${audit.overallScore}/100 — ${audit.scoreHealthRating}</strong></td></tr>');
     buffer.writeln('<tr><td>Excellent (90–100)</td><td>$excellentCount</td></tr>');
     buffer.writeln('<tr><td>Good (75–89)</td><td>$goodCount</td></tr>');
     buffer.writeln('<tr><td>Fair (60–74)</td><td>$fairCount</td></tr>');
@@ -206,10 +226,10 @@ class ReportExportService {
     buffer.writeln('<tr><th>#</th><th>IP Address</th><th>MAC Address</th><th>Manufacturer</th><th>Score</th><th>Risk Level</th></tr>');
     int devIdx = 1;
     for (final dev in devices) {
-      final s = (100 - dev.riskScoreDeduction).clamp(0, 100);
+      final s = SecurityScoringService.calculateDeviceScore(dev);
       final tier = SecurityTierExtension.fromScore(s);
       final badgeClass = 'badge-${tier.name.toLowerCase()}';
-      buffer.writeln('<tr><td>$devIdx</td><td><code>${dev.ip}</code></td><td>${dev.macAddress ?? "Unknown"}</td><td>${dev.vendor}</td><td>$s/100</td><td><span class="badge $badgeClass">${tier.displayName}</span></td></tr>');
+      buffer.writeln('<tr><td>$devIdx</td><td><code>${_h(dev.ip)}</code></td><td>${_h(dev.macAddress ?? "Unknown")}</td><td>${_h(dev.vendor)}</td><td>$s/100</td><td><span class="badge $badgeClass">${tier.displayName}</span></td></tr>');
       devIdx++;
     }
     buffer.writeln('</table>');
@@ -218,22 +238,22 @@ class ReportExportService {
     buffer.writeln('<h2>Detailed Device Assessments</h2>');
     for (int i = 0; i < devices.length; i++) {
       final dev = devices[i];
-      final s = (100 - dev.riskScoreDeduction).clamp(0, 100);
+      final s = SecurityScoringService.calculateDeviceScore(dev);
       final tier = SecurityTierExtension.fromScore(s);
       final badgeClass = 'badge-${tier.name.toLowerCase()}';
 
       buffer.writeln('<div class="device-card">');
-      buffer.writeln('<div class="device-title">Device ${i+1}: ${dev.ip} (${dev.displayName})</div>');
-      buffer.writeln('<p style="margin:4px 0 10px 0; font-size:12px; color:#64748b;">MAC: ${dev.macAddress ?? "N/A"} | Manufacturer: ${dev.vendor} | Score: <strong>$s/100</strong> <span class="badge $badgeClass" style="margin-left:6px">${tier.displayName}</span></p>');
+      buffer.writeln('<div class="device-title">Device ${i+1}: ${_h(dev.ip)} (${_h(dev.displayName)})</div>');
+      buffer.writeln('<p style="margin:4px 0 10px 0; font-size:12px; color:#64748b;">MAC: ${_h(dev.macAddress ?? "N/A")} | Manufacturer: ${_h(dev.vendor)} | Score: <strong>$s/100</strong> <span class="badge $badgeClass" style="margin-left:6px">${tier.displayName}</span></p>');
 
       if (dev.openPorts.isNotEmpty) {
         buffer.writeln('<table>');
         buffer.writeln('<tr><th>Port</th><th>Service</th><th>Risk Level</th><th>Description</th></tr>');
         for (final p in dev.openPorts) {
-          final vuln = VulnerabilityDatabase.getVulnerabilityForPort(p.port);
+          final vuln = _findingFor(dev, p.port);
           final riskName = vuln != null ? vuln.riskLevel.displayName : 'INFO';
           final rBadge = vuln != null ? 'badge-${vuln.riskLevel.name.toLowerCase()}' : 'badge-low';
-          buffer.writeln('<tr><td><strong>${p.port}</strong></td><td>${p.serviceName}</td><td><span class="badge $rBadge">$riskName</span></td><td>${p.description}</td></tr>');
+          buffer.writeln('<tr><td><strong>${p.port}</strong></td><td>${_h(p.serviceName)}</td><td><span class="badge $rBadge">$riskName</span></td><td>${_h(p.description)}</td></tr>');
         }
         buffer.writeln('</table>');
       }
@@ -243,7 +263,7 @@ class ReportExportService {
         buffer.writeln('<ul class="rec-list">');
         for (final vuln in dev.vulnerabilities) {
           for (final step in vuln.howToFixSteps) {
-            buffer.writeln('<li><strong>${step.action}:</strong> ${step.details}</li>');
+            buffer.writeln('<li><strong>${_h(step.action)}:</strong> ${_h(step.details)}</li>');
           }
         }
         buffer.writeln('</ul>');

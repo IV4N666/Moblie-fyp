@@ -26,12 +26,14 @@ class _HiddenCameraScreenState extends State<HiddenCameraScreen> {
     _report = HiddenCameraService.analyzeFromInventory(widget.currentDevices);
   }
 
-  void _runDeepCameraScan() async {
+  Future<void> _runDeepCameraScan() async {
     setState(() => _isScanning = true);
-    await Future.delayed(const Duration(milliseconds: 600));
+    // Actively probes every discovered device on all camera/video ports
+    // (554, 8554, 8000, 37777, 1935, 8081).
+    final report = await HiddenCameraService.deepScan(widget.currentDevices);
     if (mounted) {
       setState(() {
-        _report = HiddenCameraService.analyzeFromInventory(widget.currentDevices);
+        _report = report;
         _isScanning = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -73,7 +75,7 @@ class _HiddenCameraScreenState extends State<HiddenCameraScreen> {
                   CircularProgressIndicator(color: primaryWarm),
                   SizedBox(height: 16),
                   Text(
-                    'Sniffing RTSP & Surveillance Ports (554, 8000, 37777)...',
+                    'Checking camera & video ports (554, 8554, 8000, 37777, 1935, 8081)...',
                     style: TextStyle(color: primaryWarm, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -114,7 +116,7 @@ class _HiddenCameraScreenState extends State<HiddenCameraScreen> {
                             Text(
                               _report.hasHiddenCameras
                                   ? '⚠️ Surveillance Streams Detected'
-                                  : '✅ Wi-Fi Privacy Protected',
+                                  : '✅ No cameras found on this Wi-Fi',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -125,7 +127,9 @@ class _HiddenCameraScreenState extends State<HiddenCameraScreen> {
                             Text(
                               _report.hasHiddenCameras
                                   ? '${_report.streamCount} surveillance device(s) streaming on local Wi-Fi.'
-                                  : 'Zero exposed RTSP or DVR surveillance feeds found on this subnet.',
+                                  : (_report.wasDeepScan
+                                      ? 'None of the ${_report.totalScanned} devices answered on a camera or video port.'
+                                      : 'Based on the last scan. Tap refresh to probe all camera ports.'),
                               style: TextStyle(
                                 fontSize: 13,
                                 color: _report.hasHiddenCameras ? Colors.red.shade800 : Colors.green.shade800,
@@ -170,12 +174,12 @@ class _HiddenCameraScreenState extends State<HiddenCameraScreen> {
                         Icon(Icons.check_circle_outline_rounded, size: 48, color: Colors.green.shade600),
                         const SizedBox(height: 12),
                         const Text(
-                          'No Hidden Cameras Detected',
+                          'No cameras found on this network',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textDark),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'All connected devices are safe endpoints (smartphones, PCs, safe gateways). No unencrypted surveillance feeds exist.',
+                          'This only checks devices connected to this same Wi-Fi. Cameras on mobile data, on a separate network, or recording to a memory card will not appear here, so also check the room physically.',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                         ),
@@ -221,7 +225,7 @@ class _HiddenCameraScreenState extends State<HiddenCameraScreen> {
                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textDark),
                                       ),
                                       Text(
-                                        '${cam.ip} • Port ${cam.port} (${cam.vendor})',
+                                        '${cam.ip} • ${cam.port > 0 ? 'Port ${cam.port}' : 'No video port open'} (${cam.vendor})',
                                         style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                                       ),
                                     ],

@@ -12,10 +12,20 @@ class DeviceDetailScreen extends StatefulWidget {
   final DiscoveredDevice device;
   final String? gatewayIp;
 
+  /// Demo devices don't exist on the real network, so re-checking them
+  /// would wrongly report every issue as fixed.
+  final bool isDemoMode;
+
+  /// Notifies the dashboard about renames, trust changes and re-check
+  /// results so its list and overall score update too.
+  final ValueChanged<DiscoveredDevice>? onDeviceUpdated;
+
   const DeviceDetailScreen({
     super.key,
     required this.device,
     this.gatewayIp,
+    this.isDemoMode = false,
+    this.onDeviceUpdated,
   });
 
   @override
@@ -38,6 +48,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   void initState() {
     super.initState();
     _currentDevice = widget.device;
+  }
+
+  void _updateDevice(DiscoveredDevice updated) {
+    setState(() => _currentDevice = updated);
+    widget.onDeviceUpdated?.call(updated);
   }
 
   IconData _getDeviceIcon(DeviceCategory cat) {
@@ -103,19 +118,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       ),
     );
 
-    if (newName != null && newName.isNotEmpty) {
-      setState(() {
-        _currentDevice = _currentDevice.copyWith(customAlias: newName);
-      });
-      _historyService.setCustomAlias(_currentDevice.ip, newName);
-    }
+    if (newName == null || !mounted) return; // dialog cancelled
+    // An empty name now resets the device to its detected name.
+    _updateDevice(newName.isEmpty
+        ? _currentDevice.copyWith(clearCustomAlias: true)
+        : _currentDevice.copyWith(customAlias: newName));
+    _historyService.setCustomAlias(_currentDevice.ip, newName);
   }
 
   void _toggleTrustStatus() {
     final newTrust = !_currentDevice.isTrusted;
-    setState(() {
-      _currentDevice = _currentDevice.copyWith(isTrusted: newTrust);
-    });
+    _updateDevice(_currentDevice.copyWith(isTrusted: newTrust));
     _historyService.setDeviceTrusted(_currentDevice.ip, newTrust);
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -130,37 +143,65 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 
   Future<void> _recheckDevice() async {
+    if (widget.isDemoMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Re-check needs a real scan. Turn off Demo Mode and scan your network first.'),
+          backgroundColor: primaryWarm,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isRechecking = true;
     });
 
-    final updated = await _scannerService.recheckHost(
-      ip: _currentDevice.ip,
-      mac: _currentDevice.macAddress,
-      hostname: _currentDevice.hostname,
-      category: _currentDevice.category,
-      vendor: _currentDevice.vendor,
-    );
+    DiscoveredDevice? updated;
+    try {
+      updated = await _scannerService.recheckHost(
+        ip: _currentDevice.ip,
+        mac: _currentDevice.macAddress,
+        hostname: _currentDevice.hostname,
+        category: _currentDevice.category,
+        vendor: _currentDevice.vendor,
+        gatewayIp: widget.gatewayIp ?? '',
+      );
+    } catch (_) {
+      updated = null;
+    }
 
-    if (mounted) {
-      setState(() {
-        _currentDevice = _currentDevice.copyWith(
-          openPorts: updated.openPorts,
-          vulnerabilities: updated.vulnerabilities,
-          responseTimeMs: updated.responseTimeMs,
-        );
-        _isRechecking = false;
-      });
+    if (!mounted) return;
+    setState(() {
+      _isRechecking = false;
+    });
 
+    if (updated == null) {
+      // Before, an offline device came back with zero open ports and the
+      // app announced "Device is fully secured!".
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(updated.hasIssues
-              ? 'Re-check complete: ${updated.vulnerabilities.length} active risk(s) detected.'
-              : 'Re-check complete: Device is fully secured! 🎉'),
-          backgroundColor: updated.hasIssues ? const Color(0xFFD97706) : const Color(0xFF2D6A4F),
+        const SnackBar(
+          content: Text('The device did not respond, so the fix could not be confirmed. Make sure it is switched on and connected, then try again.'),
+          backgroundColor: Color(0xFFD97706),
         ),
       );
+      return;
     }
+
+    _updateDevice(_currentDevice.copyWith(
+      openPorts: updated.openPorts,
+      vulnerabilities: updated.vulnerabilities,
+      responseTimeMs: updated.responseTimeMs,
+    ));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(updated.hasIssues
+            ? 'Re-check complete: ${updated.vulnerabilities.length} active risk(s) detected.'
+            : 'Re-check complete: no risky services found on this device. 🎉'),
+        backgroundColor: updated.hasIssues ? const Color(0xFFD97706) : const Color(0xFF2D6A4F),
+      ),
+    );
   }
 
   @override

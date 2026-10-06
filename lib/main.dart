@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'services/history_service.dart';
 import 'ui/screens/dashboard_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Restore saved scan history, device names and trusted devices.
+  await HistoryService().load();
   
   // Clean, soft status bar
   SystemChrome.setSystemUIOverlayStyle(

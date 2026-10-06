@@ -120,13 +120,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         devices: demoDevices,
       );
 
-      _historyService.recordAudit(
-        score: audit.overallScore,
-        totalDevices: demoDevices.length,
-        riskyDevices: demoDevices.where((d) => d.hasIssues).length,
-        wifiSsid: 'Demo-SmartHome-WiFi',
-      );
-
+      // Demo results are not saved to history, so the real trend stays real.
       setState(() {
         _devices = demoDevices;
         _score = audit.overallScore;
@@ -138,31 +132,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    final ctx = await _netInfoService.getCurrentNetworkContext();
     setState(() {
-      _networkContext = ctx;
       _isScanning = true;
       _scanProgress = 0.0;
+      _scanStatusText = 'Checking your Wi-Fi connection...';
+    });
+
+    final ctx = await _netInfoService.getCurrentNetworkContext();
+    if (!mounted) return;
+
+    if (!ctx.isConnected) {
+      // Previously the app silently scanned a made-up 192.168.1.x network.
+      setState(() {
+        _networkContext = ctx;
+        _isScanning = false;
+        _scanStatusText =
+            'No Wi-Fi connection found. Connect to Wi-Fi, or turn on Demo Mode.';
+      });
+      return;
+    }
+
+    setState(() {
+      _networkContext = ctx;
       _scanStatusText = 'Scanning devices on ${ctx.wifiSsid}...';
       _devices = [];
       _score = 100;
     });
 
-    final results = await _scannerService.scanSubnet(
-      subnetPrefix: ctx.subnetPrefix,
-      localIp: ctx.localIp,
-      gatewayIp: ctx.gatewayIp,
-      onProgress: (progress) {
-        if (mounted) {
-          setState(() {
-            _scanProgress = progress.ratio;
-            _scanStatusText = progress.isCancelled
-                ? 'Scan paused. Displaying discovered devices...'
-                : 'Inspecting ${progress.currentScanningIp} (${(progress.ratio * 100).toInt()}%) • ${progress.devicesFound} devices';
-          });
-        }
-      },
-    );
+    List<DiscoveredDevice> results;
+    try {
+      results = await _scannerService.scanSubnet(
+        subnetPrefix: ctx.subnetPrefix,
+        localIp: ctx.localIp,
+        gatewayIp: ctx.gatewayIp,
+        perPortTimeoutMs: _settingsService.portScanTimeoutMs,
+        maxConcurrentHosts: _settingsService.maxConcurrentHosts,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() {
+              _scanProgress = progress.ratio;
+              _scanStatusText = progress.isCancelled
+                  ? 'Scan stopped. Showing devices found so far...'
+                  : 'Inspecting ${progress.currentScanningIp} (${(progress.ratio * 100).toInt()}%) • ${progress.devicesFound} devices';
+            });
+          }
+        },
+      );
+    } catch (e) {
+      // Without this, any error left the spinner running forever.
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+          _scanStatusText = 'Scan failed: $e';
+        });
+      }
+      return;
+    }
+
+    // Re-apply the user's saved device names and trusted flags.
+    results = _historyService.applyUserPreferences(results);
+    final wasCancelled = _scannerService.isCancelled;
 
     final audit = SecurityScoringService.evaluateNetworkHealth(
       subnet: ctx.subnetPrefix,
@@ -172,12 +201,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       devices: results,
     );
 
-    _historyService.recordAudit(
-      score: audit.overallScore,
-      totalDevices: results.length,
-      riskyDevices: results.where((d) => d.hasIssues).length,
-      wifiSsid: ctx.wifiSsid,
-    );
+    // A stopped scan only covers part of the network, so it is not saved
+    // as a history point (it would distort the trend).
+    if (!wasCancelled) {
+      _historyService.recordAudit(
+        score: audit.overallScore,
+        totalDevices: results.length,
+        riskyDevices: results.where((d) => d.hasIssues).length,
+        wifiSsid: ctx.wifiSsid,
+      );
+    }
 
     if (mounted) {
       setState(() {
@@ -186,9 +219,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _lastAuditResult = audit;
         _isScanning = false;
         _hasCompletedScan = true;
-        _scanStatusText = 'Scan completed. Found ${results.length} active devices.';
+        _scanStatusText = wasCancelled
+            ? 'Partial scan: ${results.length} devices found before stopping (not saved to history).'
+            : 'Scan completed. Found ${results.length} active devices.';
       });
     }
+  }
+
+  /// Called by DeviceDetailScreen whenever a device is renamed, trusted or
+  /// re-checked, so the list and the overall score stay in sync.
+  /// (Before, those changes only existed inside the detail screen.)
+  void _onDeviceUpdated(DiscoveredDevice updated) {
+    if (!mounted) return;
+    final index = _devices.indexWhere((d) => d.ip == updated.ip);
+    if (index == -1) return;
+
+    final ctx = _networkContext;
+    final previous = _lastAuditResult;
+    final devices = List<DiscoveredDevice>.of(_devices)..[index] = updated;
+    final audit = SecurityScoringService.evaluateNetworkHealth(
+      subnet: previous?.subnet ?? ctx?.subnetPrefix ?? '192.168.1',
+      localIp: previous?.localIp ?? ctx?.localIp ?? '',
+      gatewayIp: previous?.gatewayIp ?? ctx?.gatewayIp ?? '',
+      wifiSsid: previous?.wifiSsid ?? ctx?.wifiSsid ?? 'Home Wi-Fi',
+      devices: devices,
+    );
+
+    setState(() {
+      _devices = devices;
+      _lastAuditResult = audit;
+      _score = audit.overallScore;
+    });
   }
 
   void _cancelCurrentScan() {
@@ -261,7 +322,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final riskyDevicesCount = _devices.where((d) => d.hasIssues).length;
     final displayDevices = _filteredDevices;
-    final previousScore = _historyService.previousAudit?.score;
+    // No trend arrow in Demo Mode: demo results are not part of history.
+    final previousScore =
+        _isDemoMode ? null : _historyService.previousAudit?.score;
 
     return Scaffold(
       appBar: AppBar(
@@ -382,6 +445,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               overallScore: _score,
               tier: SecurityTierExtension.fromScore(_score),
               onReScan: _startNetworkScan,
+              onDeviceUpdated: _onDeviceUpdated,
+              isDemoMode: _isDemoMode,
             )
           : RefreshIndicator(
               color: primaryWarm,
@@ -874,6 +939,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           builder: (context) => DeviceDetailScreen(
                             device: device,
                             gatewayIp: _networkContext?.gatewayIp,
+                            isDemoMode: _isDemoMode,
+                            onDeviceUpdated: _onDeviceUpdated,
                           ),
                         ),
                       );

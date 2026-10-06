@@ -1,6 +1,5 @@
-import 'dart:async';
-import 'dart:io';
 import 'dart:math';
+import 'socket_probe.dart';
 
 class PingSample {
   final int sequence;
@@ -78,7 +77,9 @@ class PingStatistics {
 
     final avg = sum / received;
 
-    // Calculate Jitter (RFC 3550 standard calculation)
+    // Jitter = mean absolute difference between consecutive RTTs
+    // (the instantaneous form of RFC 3550's interarrival jitter, without
+    // its 1/16 smoothing).
     double jitter = 0.0;
     if (successful.length > 1) {
       double diffSum = 0.0;
@@ -103,50 +104,46 @@ class PingStatistics {
 }
 
 class PingDiagnosticService {
-  /// Measures socket round-trip time to target host and preferred port
+  /// Measures TCP connect round-trip time to [host]:[port].
+  ///
+  /// A "connection refused" reply (TCP RST) also counts as a successful
+  /// round trip: the host answered, the port is just closed. Detection now
+  /// uses the OS error code instead of matching English error text.
   static Future<PingSample> singleProbe({
     required String host,
     int port = 80,
     required int sequence,
     int timeoutMs = 1000,
   }) async {
-    final sw = Stopwatch()..start();
-    try {
-      final socket = await Socket.connect(
-        host,
-        port,
-        timeout: Duration(milliseconds: timeoutMs),
-      );
-      sw.stop();
-      socket.destroy();
-      return PingSample(
-        sequence: sequence,
-        latencyMs: sw.elapsedMilliseconds,
-        isSuccess: true,
-        status: 'Connected (${sw.elapsedMilliseconds} ms)',
-        timestamp: DateTime.now(),
-      );
-    } catch (e) {
-      sw.stop();
-      // If port is closed, check if connection was actively rejected (which still proves host is alive)
-      final err = e.toString();
-      final isRst = err.contains('refused') || err.contains('reset');
-      if (isRst && sw.elapsedMilliseconds < timeoutMs) {
+    final result =
+        await SocketProbe.probe(host, port, Duration(milliseconds: timeoutMs));
+    final latency = max(1, result.elapsedMs);
+
+    switch (result.state) {
+      case PortState.open:
         return PingSample(
           sequence: sequence,
-          latencyMs: max(1, sw.elapsedMilliseconds),
+          latencyMs: latency,
           isSuccess: true,
-          status: 'Host Responded RST (${sw.elapsedMilliseconds} ms)',
+          status: 'Connected ($latency ms)',
           timestamp: DateTime.now(),
         );
-      }
-      return PingSample(
-        sequence: sequence,
-        latencyMs: timeoutMs,
-        isSuccess: false,
-        status: 'Timeout / Unreachable',
-        timestamp: DateTime.now(),
-      );
+      case PortState.closed:
+        return PingSample(
+          sequence: sequence,
+          latencyMs: latency,
+          isSuccess: true,
+          status: 'Host Responded RST ($latency ms)',
+          timestamp: DateTime.now(),
+        );
+      case PortState.filtered:
+        return PingSample(
+          sequence: sequence,
+          latencyMs: timeoutMs,
+          isSuccess: false,
+          status: 'Timeout / Unreachable',
+          timestamp: DateTime.now(),
+        );
     }
   }
 }

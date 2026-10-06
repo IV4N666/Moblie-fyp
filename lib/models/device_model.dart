@@ -112,12 +112,13 @@ class DiscoveredDevice {
     int? responseTimeMs,
     DateTime? firstSeen,
     bool? isTrusted,
+    bool clearCustomAlias = false,
   }) {
     return DiscoveredDevice(
       ip: ip ?? this.ip,
       macAddress: macAddress ?? this.macAddress,
       hostname: hostname ?? this.hostname,
-      customAlias: customAlias ?? this.customAlias,
+      customAlias: clearCustomAlias ? null : (customAlias ?? this.customAlias),
       vendor: vendor ?? this.vendor,
       category: category ?? this.category,
       openPorts: openPorts ?? List.from(this.openPorts),

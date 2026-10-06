@@ -22,7 +22,7 @@ class AnomalyDetectionScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AI Behavioral Anomaly Detector'),
+        title: const Text('Anomaly Detector'),
         centerTitle: true,
       ),
       body: ListView(
@@ -66,7 +66,7 @@ class AnomalyDetectionScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Unsupervised Baseline Profiling',
+                            'Isolation Forest + Expert Rules',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -74,7 +74,7 @@ class AnomalyDetectionScreen extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'FYP Section 5.2.2 Machine Learning Requirement',
+                            'Unsupervised: compares each device with the others on this network',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.85),
                               fontSize: 11.5,
@@ -87,7 +87,7 @@ class AnomalyDetectionScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Monitors device behavioral baselines and flags unusual service exposures (e.g., smart plugs attempting Telnet access or security cameras running remote command daemons).',
+                  'Flags devices whose open services look unusual compared with the rest of your network, plus known-bad combinations (e.g., a smart plug or camera running Telnet). Needs at least 4 devices for the statistical part.',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.92),
                     fontSize: 12.5,
@@ -243,7 +243,15 @@ class AnomalyDetectionScreen extends StatelessWidget {
                         valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
+                    // Shows how the score was built, so it can be explained.
+                    Text(
+                      profile.isolationScore == null
+                          ? 'Rules: ${(profile.ruleScore * 100).round()}% • Isolation Forest: needs 4+ devices'
+                          : 'Rules: ${(profile.ruleScore * 100).round()}% • Isolation score: ${profile.isolationScore!.toStringAsFixed(2)} (0.50 = typical)',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 8),
 
                     // Findings / Anomaly Details
                     if (profile.findings.isNotEmpty) ...[

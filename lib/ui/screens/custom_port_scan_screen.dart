@@ -1,6 +1,6 @@
-import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../services/network_info_service.dart';
+import '../../services/socket_probe.dart';
 
 class CustomPortResult {
   final int port;
@@ -36,6 +36,7 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
 
   bool _isScanning = false;
   bool _cancelRequested = false;
+  bool _rangeWasTrimmed = false;
   int _scannedCount = 0;
   int _totalPorts = 0;
   double _timeoutMs = 200.0;
@@ -82,6 +83,7 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
           final end = int.tryParse(rangeParts[1].trim());
           if (start != null && end != null && start <= end && start >= 1 && end <= 65535) {
             final limitEnd = (end - start > 500) ? start + 500 : end; // Prevent UI freeze on extreme ranges
+            if (limitEnd != end) _rangeWasTrimmed = true;
             for (int p = start; p <= limitEnd; p++) {
               ports.add(p);
             }
@@ -137,7 +139,25 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
       return;
     }
 
+    // Home-network tool: only scan private (RFC 1918) addresses. Scanning
+    // hosts on the Internet without permission can be illegal and breaks
+    // app-store policies.
+    if (!NetworkInfoService.isPrivateIpv4(targetIp)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Only devices on your own local network can be scanned (addresses starting 192.168., 10. or 172.16–31.).'),
+        ),
+      );
+      return;
+    }
+
+    _rangeWasTrimmed = false;
     final ports = _parsePorts(_portsController.text);
+    if (_rangeWasTrimmed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Large ranges are limited to 500 ports per range.')),
+      );
+    }
     if (ports.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please specify valid ports (e.g., 80, 443 or 1-100).')),
@@ -159,28 +179,21 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
 
       final batch = ports.sublist(i, (i + batchSize > ports.length) ? ports.length : i + batchSize);
       final batchResults = await Future.wait(batch.map((port) async {
-        final sw = Stopwatch()..start();
-        bool isOpen = false;
-        try {
-          final socket = await Socket.connect(
-            targetIp,
-            port,
-            timeout: Duration(milliseconds: _timeoutMs.toInt()),
-          );
-          sw.stop();
-          socket.destroy();
-          isOpen = true;
-        } catch (_) {
-          sw.stop();
-        }
-
+        final r = await SocketProbe.probe(
+          targetIp,
+          port,
+          Duration(milliseconds: _timeoutMs.toInt()),
+        );
         return CustomPortResult(
           port: port,
           service: _lookupServiceName(port),
-          isOpen: isOpen,
-          latencyMs: sw.elapsedMilliseconds,
+          isOpen: r.state == PortState.open,
+          latencyMs: r.elapsedMs,
         );
       }));
+
+      // Stop pressed while this batch was running: discard it.
+      if (_cancelRequested) break;
 
       if (mounted) {
         setState(() {
@@ -190,7 +203,7 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
       }
     }
 
-    if (mounted) {
+    if (mounted && !_cancelRequested) {
       setState(() {
         _isScanning = false;
       });
