@@ -1,4 +1,5 @@
 import 'package:wifi_guardian_app/models/device_model.dart';
+import 'package:wifi_guardian_app/models/security_model.dart';
 import 'package:wifi_guardian_app/services/vulnerability_db.dart';
 
 /// Builds a device whose open ports and findings match [ports].
@@ -16,10 +17,16 @@ DiscoveredDevice deviceWithPorts(
       for (final p in ports)
         PortInfo(port: p, serviceName: 'Port $p', isSecure: false, description: ''),
     ],
-    vulnerabilities: [
-      for (final p in ports)
-        if ((VulnerabilityDatabase.getVulnerabilityForPort(p)?.penaltyPoints ?? 0) > 0)
-          VulnerabilityDatabase.getVulnerabilityForPort(p)!,
-    ],
+    vulnerabilities: _findings(ports),
   );
+}
+
+/// Knowledge-base findings for [ports], one per weakness id (as the scanner does).
+List<SecurityVulnerability> _findings(List<int> ports) {
+  final found = <SecurityVulnerability>[];
+  for (final p in ports) {
+    final v = VulnerabilityDatabase.getVulnerabilityForPort(p);
+    if (v != null && !found.any((f) => f.id == v.id)) found.add(v);
+  }
+  return found;
 }

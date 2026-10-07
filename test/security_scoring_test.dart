@@ -13,35 +13,43 @@ void main() {
     });
 
     test('device score subtracts that device\'s penalties', () {
-      final telnetCam = deviceWithPorts('192.168.1.10', [23]); // -35
-      expect(SecurityScoringService.calculateDeviceScore(telnetCam), 65);
-      expect(SecurityScoringService.calculateNetworkScore([telnetCam]), 65);
+      final telnetCam = deviceWithPorts('192.168.1.10', [23]); // Critical: -45
+      expect(SecurityScoringService.calculateDeviceScore(telnetCam), 55);
+      expect(SecurityScoringService.calculateNetworkScore([telnetCam]), 55);
     });
 
-    test('demo network scores 62 (FAIR) instead of 0', () {
+    test('the same weakness on several ports is deducted once', () {
+      // 80 and 8080 are both "unencrypted web admin" (High, -30).
+      final router = deviceWithPorts('192.168.1.1', [80, 8080]);
+      expect(router.vulnerabilities.length, 1);
+      expect(SecurityScoringService.calculateDeviceScore(router), 70);
+    });
+
+    test('demo network scores 48 (POOR)', () {
       final demo = ScannerService.getDemoDevices('192.168.1');
       final score = SecurityScoringService.calculateNetworkScore(demo);
-      // average 73.125, weakest device 35 -> 0.7*73.125 + 0.3*35 = 61.69
-      expect(score, 62);
-      expect(SecurityTierExtension.fromScore(score), SecurityTier.fair);
+      // device scores 70, 10, 100, 55, 70, 100, 55, 55
+      // average 64.375, weakest 10 -> 0.7 * 64.375 + 0.3 * 10 = 48.06
+      expect(score, 48);
+      expect(SecurityTierExtension.fromScore(score), SecurityTier.poor);
     });
 
     test('many devices with a web UI no longer drive the score to 0', () {
       final devices = [
         for (var i = 2; i < 12; i++) deviceWithPorts('192.168.1.$i', [80]),
       ];
-      // Old formula: 100 - 10*20 = 0. New: every device scores 80.
-      expect(SecurityScoringService.calculateNetworkScore(devices), 80);
+      // Summing every penalty from one 100 gave 0. Now every device scores 70.
+      expect(SecurityScoringService.calculateNetworkScore(devices), 70);
     });
 
     test('one critical device is not hidden by many clean ones', () {
       final devices = [
-        deviceWithPorts('192.168.1.2', [23, 80, 554]), // device score 35
+        deviceWithPorts('192.168.1.2', [23, 80, 554]), // 100 - 45 - 30 - 15 = 10
         for (var i = 3; i < 12; i++) deviceWithPorts('192.168.1.$i', []),
       ];
       final score = SecurityScoringService.calculateNetworkScore(devices);
-      // Plain average would be 93.5 (EXCELLENT); weakest-link term pulls it down.
-      expect(score, 76);
+      // Plain average would be 91 (EXCELLENT); the weakest-link term gives 67.
+      expect(score, 67);
       expect(score, lessThan(90));
     });
 

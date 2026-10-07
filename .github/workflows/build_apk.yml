@@ -95,7 +95,7 @@ jobs:
             
             ### 🎓 Key Academic & Technical Capabilities:
             - **5-Tier Qualitative Risk Classification** (Excellent, Good, Fair, Poor, Critical)
-            - **18 Curated IoT Vulnerabilities with Clear Fix Steps**
+            - **18 scored ports, CVSS v3.1-based penalties** (see docs/scoring-method.md)
             - **Anomaly Detection (Isolation Forest + expert rules)**
             - **Windows PC version** (zip attached below)
             - **Academic Testbed Demo Mode** (Safe demonstration on any network)

@@ -23,10 +23,9 @@ class SecurityScoringService {
   ///           − 10 if more than 3 unidentified devices
   ///
   /// The previous version subtracted every penalty on every device from a
-  /// single 100. Any network with ~5 devices showing a web UI on port 80
-  /// reached 0/100, and the built-in demo network scored 0 (CRITICAL) while
-  /// audit_report.md documents it as FAIR. With this formula the demo
-  /// network scores 62 (FAIR).
+  /// single 100, so any network with a few web interfaces reached 0/100.
+  /// Penalties per finding are defined in docs/scoring-method.md; with them
+  /// the built-in demo network scores 48 (POOR).
   static int calculateNetworkScore(List<DiscoveredDevice> devices) {
     if (devices.isEmpty) return 100;
 

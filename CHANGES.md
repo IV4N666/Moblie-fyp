@@ -36,7 +36,7 @@ New formula:
     network score = 0.7 × average(device scores) + 0.3 × min(device scores)
                     − 10 if more than 3 unidentified devices
 
-The average reflects overall hygiene. The weakest-link term stops one critical camera from being hidden by many clean phones (1 camera at 35 + 9 clean devices = 76, not 93.5). The demo network now scores **62 (FAIR)**.
+The average reflects overall hygiene. The weakest-link term stops one critical camera from being hidden by many clean phones (1 camera at 10 + 9 clean devices = 67, not 91). With the penalties from section 13, the demo network scores **48 (POOR)**.
 
 **Update Section 3.8 / Table 3.5 of the report to describe this formula.**
 
@@ -100,6 +100,23 @@ Files and code that nothing used were removed, so the repository only holds what
 - Unused dependencies `multicast_dns` and `cupertino_icons` removed from `pubspec.yaml`.
 - Dead code removed: unused settings (`enableVibration`, `setMode`, `updateSettings`), unused history getters, `RiskLevel.priority`, `getAllKnownVulnerabilities`, unused anomaly labels, and port names for UDP ports no longer probed over TCP.
 - `*.patch` added to `.gitignore` so patch files used locally are never committed.
+
+## 13. Scoring method based on CVSS v3.1 and published attacks
+
+The old penalties had no documented basis and were inconsistent (HTTP was MEDIUM but cost as much as HIGH items; the LOW printer port cost as much as the MEDIUM camera stream). They are now derived by one rule, documented in `docs/scoring-method.md`:
+
+1. Each service's typical weakness has a CVSS v3.1 vector with Attack Vector = Adjacent; the score is computed by `lib/models/cvss.dart` with the official equations.
+2. The level is raised once when the service is attacked at scale in its default configuration (Mirai, ADB.Miner, the 2017 MongoDB ransom wave).
+3. Points by level: Critical 45, High 30, Medium 15, Low 5, calibrated so one finding moves a perfect device into the matching tier.
+
+Other changes:
+
+- Port 5555 (Android Debug Bridge) added; UDP-only and 0-point entries removed from the knowledge base (18 scored ports, 15 weaknesses).
+- The same weakness on several ports is deducted once (Telnet 23/2323; web admin 80/8080/8888).
+- Web ports that only redirect to HTTPS are not penalised.
+- Each finding shows its basis in the app and in the Markdown report (CVSS score, threat adjustment, points).
+- New `test/scoring_method_test.dart` checks every knowledge-base entry against the method.
+- The demo network now scores **48 (POOR)** instead of 62 (FAIR).
 
 ## Still to do / known limitations
 

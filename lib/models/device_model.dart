@@ -75,8 +75,15 @@ class DiscoveredDevice {
     return hostname.isNotEmpty ? hostname : 'Device at $ip';
   }
 
+  /// Total penalty, counting each weakness id once (e.g. web admin on both
+  /// 80 and 8080 is one weakness).
   int get riskScoreDeduction {
-    return vulnerabilities.fold(0, (sum, item) => sum + item.penaltyPoints);
+    final seen = <String>{};
+    var total = 0;
+    for (final v in vulnerabilities) {
+      if (seen.add(v.id)) total += v.penaltyPoints;
+    }
+    return total;
   }
 
   String get categoryDisplayName {

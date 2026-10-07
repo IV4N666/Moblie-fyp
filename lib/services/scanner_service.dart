@@ -53,6 +53,7 @@ class ScannerService {
     3306,  // MySQL Database
     3389,  // RDP Remote Desktop
     5432,  // PostgreSQL
+    5555,  // Android Debug Bridge (ADB) over the network
     5900,  // VNC
     6379,  // Redis
     7000,  // AirPlay
@@ -65,6 +66,10 @@ class ScannerService {
   ];
 
   static const Set<int> _encryptedPorts = {22, 443};
+
+  /// Web ports that are only a risk if they serve the login page over plain
+  /// HTTP. A port that just redirects to HTTPS is not penalised.
+  static const Set<int> _webPorts = {80, 8080, 8888};
 
   static const int defaultPortTimeoutMs = 300;
   static const int defaultConcurrentHosts = 24;
@@ -241,6 +246,14 @@ class ScannerService {
     var answered = false;
     int? fastestReplyMs;
 
+    // Check open web ports once: do they only redirect to HTTPS?
+    final redirectsToSecure = <int>{};
+    await Future.wait(results
+        .where((r) => r.state == PortState.open && _webPorts.contains(r.port))
+        .map((r) async {
+      if (await redirectsToHttps(ip, r.port)) redirectsToSecure.add(r.port);
+    }));
+
     for (final r in results) {
       if (!r.hostAnswered) continue;
       answered = true;
@@ -249,14 +262,20 @@ class ScannerService {
       }
       if (r.state != PortState.open) continue;
 
+      final redirects = redirectsToSecure.contains(r.port);
       openPorts.add(PortInfo(
         port: r.port,
         serviceName: _getPortServiceName(r.port),
-        isSecure: _encryptedPorts.contains(r.port),
-        description: _getPortDescription(r.port),
+        isSecure: redirects || _encryptedPorts.contains(r.port),
+        description: redirects
+            ? 'Redirects to the encrypted HTTPS page. No risk.'
+            : _getPortDescription(r.port),
       ));
+      if (redirects) continue;
+
+      // One finding per weakness: 80, 8080 and 8888 share the same id.
       final vuln = VulnerabilityDatabase.getVulnerabilityForPort(r.port);
-      if (vuln != null && vuln.penaltyPoints > 0) {
+      if (vuln != null && !detectedVulns.any((v) => v.id == vuln.id)) {
         detectedVulns.add(vuln);
       }
     }
@@ -433,6 +452,8 @@ class ScannerService {
         return 'HTTP-Alt (Alternate Web Port)';
       case 9100:
         return 'RAW JetDirect (Network Printer)';
+      case 5555:
+        return 'ADB (Android Debug Bridge)';
       case 27017:
         return 'MongoDB (NoSQL Database)';
       case 62078:
@@ -482,6 +503,8 @@ class ScannerService {
         return 'Secondary development or HTTP proxy port.';
       case 9100:
         return 'Unauthenticated direct network printing queue.';
+      case 5555:
+        return 'Android debugging interface. Gives full control of the device without a password.';
       case 27017:
         return 'Direct NoSQL document database listening on local network.';
       case 62078:
@@ -492,10 +515,36 @@ class ScannerService {
   }
 
   static List<SecurityVulnerability> _lookupVulns(List<int> ports) {
-    return ports
-        .map((p) => VulnerabilityDatabase.getVulnerabilityForPort(p))
-        .whereType<SecurityVulnerability>()
-        .toList();
+    final found = <SecurityVulnerability>[];
+    for (final p in ports) {
+      final v = VulnerabilityDatabase.getVulnerabilityForPort(p);
+      if (v != null && !found.any((f) => f.id == v.id)) found.add(v);
+    }
+    return found;
+  }
+
+  /// True when http://ip:port/ answers with a redirect to an https:// URL,
+  /// i.e. the login page itself is only served encrypted.
+  static Future<bool> redirectsToHttps(
+    String ip,
+    int port, {
+    Duration timeout = const Duration(milliseconds: 1500),
+  }) async {
+    final client = HttpClient()..connectionTimeout = timeout;
+    try {
+      final request = await client
+          .getUrl(Uri(scheme: 'http', host: ip, port: port, path: '/'))
+          .timeout(timeout);
+      request.followRedirects = false;
+      final response = await request.close().timeout(timeout);
+      final location = response.headers.value(HttpHeaders.locationHeader) ?? '';
+      return response.isRedirect &&
+          location.trim().toLowerCase().startsWith('https://');
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
   }
 
   /// Provides the exact representative testbed home network from FYP1 Report

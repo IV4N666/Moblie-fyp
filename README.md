@@ -78,6 +78,12 @@ The same app also runs on a Windows computer and scans the network the PC is con
 
 ---
 
+## 📐 How the Score Is Calculated
+
+Each risky service is scored with CVSS v3.1 (attacker on the same Wi-Fi), raised one level when it is attacked at scale in its default configuration, and deducted once per device: Critical −45, High −30, Medium −15, Low −5. The network score is 0.7 × the average device score + 0.3 × the lowest device score. Full method, port list and references: [docs/scoring-method.md](docs/scoring-method.md).
+
+---
+
 ## 📱 How to Build the Standalone APK
 
 ### Prerequisites

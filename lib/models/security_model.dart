@@ -1,3 +1,5 @@
+import 'dart:math';
+import 'cvss.dart';
 import 'device_model.dart';
 
 enum RiskLevel {
@@ -68,6 +70,48 @@ extension RiskLevelExtension on RiskLevel {
         return 'LOW';
     }
   }
+
+  /// CVSS v3.1 qualitative band for a base score (FIRST specification):
+  /// Low 0.1–3.9, Medium 4.0–6.9, High 7.0–8.9, Critical 9.0–10.0.
+  /// Returns null for 0.0 ("None").
+  static RiskLevel? fromCvss(double score) {
+    if (score <= 0) return null;
+    if (score < 4.0) return RiskLevel.low;
+    if (score < 7.0) return RiskLevel.medium;
+    if (score < 9.0) return RiskLevel.high;
+    return RiskLevel.critical;
+  }
+
+  /// One level higher (Critical stays Critical).
+  RiskLevel get raisedOneLevel =>
+      RiskLevel.values[min(index + 1, RiskLevel.values.length - 1)];
+}
+
+/// Points deducted from a device's score for one finding, by severity.
+///
+/// Calibrated to the five security tiers: a single finding of a given
+/// severity moves a perfect device (100) into the matching tier.
+///   Critical 45 -> 55 POOR · High 30 -> 70 FAIR
+///   Medium 15  -> 85 GOOD · Low 5   -> 95 EXCELLENT
+/// Two Critical findings (-> 10) reach the CRITICAL tier.
+class SeverityPoints {
+  static const int critical = 45;
+  static const int high = 30;
+  static const int medium = 15;
+  static const int low = 5;
+
+  static int of(RiskLevel level) {
+    switch (level) {
+      case RiskLevel.critical:
+        return critical;
+      case RiskLevel.high:
+        return high;
+      case RiskLevel.medium:
+        return medium;
+      case RiskLevel.low:
+        return low;
+    }
+  }
 }
 
 class FixStep {
@@ -99,6 +143,8 @@ class FixStep {
 }
 
 class SecurityVulnerability {
+  /// Weakness id. Several ports can share one id (e.g. web admin on 80,
+  /// 8080 and 8888); a device is only penalised once per id.
   final String id;
   final String title;
   final String summary;
@@ -107,6 +153,15 @@ class SecurityVulnerability {
   final int penaltyPoints;
   final int affectedPort;
   final List<FixStep> howToFixSteps;
+
+  /// CVSS v3.1 base vector of the typical weakness, scored with
+  /// Attack Vector = Adjacent because the attacker has to be on the same
+  /// Wi-Fi. See docs/scoring-method.md.
+  final String cvssVector;
+
+  /// Evidence that this service is attacked at scale in its default
+  /// configuration. When present, the severity is raised one level.
+  final String? threatEvidence;
 
   const SecurityVulnerability({
     required this.id,
@@ -117,29 +172,21 @@ class SecurityVulnerability {
     required this.penaltyPoints,
     required this.affectedPort,
     required this.howToFixSteps,
+    required this.cvssVector,
+    this.threatEvidence,
   });
 
-  SecurityVulnerability copyWith({
-    String? id,
-    String? title,
-    String? summary,
-    String? plainEnglishWhyDangerous,
-    RiskLevel? riskLevel,
-    int? penaltyPoints,
-    int? affectedPort,
-    List<FixStep>? howToFixSteps,
-  }) {
-    return SecurityVulnerability(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      summary: summary ?? this.summary,
-      plainEnglishWhyDangerous:
-          plainEnglishWhyDangerous ?? this.plainEnglishWhyDangerous,
-      riskLevel: riskLevel ?? this.riskLevel,
-      penaltyPoints: penaltyPoints ?? this.penaltyPoints,
-      affectedPort: affectedPort ?? this.affectedPort,
-      howToFixSteps: howToFixSteps ?? this.howToFixSteps,
-    );
+  double get cvssBaseScore => CvssV31.baseScore(cvssVector);
+
+  /// One line explaining where the penalty comes from (shown in the app
+  /// and in exported reports).
+  String get scoringBasis {
+    final score = cvssBaseScore.toStringAsFixed(1);
+    final band = RiskLevelExtension.fromCvss(cvssBaseScore)?.displayName ?? 'NONE';
+    final raised = threatEvidence == null
+        ? ''
+        : ', raised to ${riskLevel.displayName} because of $threatEvidence';
+    return 'CVSS v3.1 $score ($band) for an attacker on the same Wi-Fi$raised. Penalty: -$penaltyPoints points.';
   }
 }
 
