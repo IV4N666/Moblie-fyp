@@ -109,7 +109,10 @@ jobs:
   # has passed analysis and unit tests.
   build-windows:
     needs: build
-    runs-on: windows-latest
+    # Pinned to windows-2022: `windows-latest` now ships Visual Studio 2026,
+    # which Flutter 3.22 does not recognise (it falls back to the VS 2019
+    # generator and fails). windows-2022 has Visual Studio 2022.
+    runs-on: windows-2022
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
