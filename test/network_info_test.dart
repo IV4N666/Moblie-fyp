@@ -10,4 +10,23 @@ void main() {
       expect(NetworkInfoService.isPrivateIpv4(ip), isFalse, reason: ip);
     }
   });
+
+  test('interface ranking prefers real Wi-Fi and skips virtual adapters', () {
+    int rank(String n) => NetworkInfoService.interfacePriority(n);
+
+    // Wi-Fi on Android / Windows / Linux / macOS
+    expect(rank('wlan0'), 0);
+    expect(rank('Wi-Fi'), 0);
+    expect(rank('wlp2s0'), 0);
+    expect(rank('en0'), 0);
+
+    // Wired Ethernet comes after Wi-Fi
+    expect(rank('Ethernet'), 1);
+    expect(rank('eth0'), 1);
+
+    // Never used: mobile data, VPN and virtual adapters
+    for (final n in ['rmnet_data0', 'tun0', 'vEthernet (WSL)', 'VirtualBox Host-Only Network', 'VMware Network Adapter VMnet8', 'Bluetooth Network Connection']) {
+      expect(rank(n), -1, reason: n);
+    }
+  });
 }

@@ -79,6 +79,17 @@ History, names and trusted devices were kept in memory only, so the "score trend
 - CI runs `flutter analyze` and `flutter test` before building, keeps `test/` and `analysis_options.yaml` through the `flutter create --overwrite` step, and tags releases from `version:` in `pubspec.yaml` instead of overwriting `v1.0.0` every push. Version bumped to 1.1.0+2.
 - README download links point to the latest release; QR code regenerated for that link.
 
+## 11. Windows (PC) version
+
+The app now also builds for Windows, so the same scanner runs on a phone and on a computer.
+
+- CI has a second job (`build-windows`) that runs after the Android job passes. It generates the `windows/` folder, builds a release, and uploads `Wi-Fi-Security-Guardian-Windows-v<version>.zip` as an artifact and to the GitHub release.
+- `network_info_service.dart` now ranks network adapters by name. Windows has virtual adapters with private addresses ("vEthernet (WSL)", VirtualBox, VMware, Docker); without this the app could scan a virtual network instead of the real one. A PC on a cable uses its Ethernet address.
+- The location-permission request (only needed on phones to read the Wi-Fi name) is skipped on computers. Without a Wi-Fi name, a computer shows "Local Network".
+- The device running the app is labelled "This Computer" and categorised as a computer on desktop.
+- In a wide desktop window, content is limited to 760 px wide so the phone-style layout stays readable.
+- New test: adapter ranking (Wi-Fi first, Ethernet second, virtual/VPN/mobile-data adapters never used).
+
 ## Still to do / known limitations
 
 - **`audit_report.md` and `audit_report.html` were written by hand and do not match the app.** They show anomaly scores for the MQTT hub and the PC that no rule produces, a 65.5 score the code never computed, and "IEEE OUI manufacturer resolution", which is impossible on Android 10+ (apps cannot read MAC addresses). Regenerate them from the app (Demo Mode → Export → Copy) or correct them.

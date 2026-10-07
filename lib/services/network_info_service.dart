@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:network_info_plus/network_info_plus.dart';
+import 'platform_support.dart';
 
 class NetworkContext {
   final String localIp;
@@ -64,7 +65,8 @@ class NetworkInfoService {
               wifiName.isNotEmpty &&
               wifiName != '<unknown ssid>')
           ? wifiName.replaceAll('"', '')
-          : 'Home Wi-Fi',
+          // A computer may be on a cable, or Windows may hide the Wi-Fi name.
+          : (PlatformSupport.isMobile ? 'Home Wi-Fi' : 'Local Network'),
     );
   }
 
@@ -92,32 +94,64 @@ class NetworkInfoService {
     return a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168);
   }
 
-  /// Fallback when the plugin can't report the Wi-Fi IP.
+  /// Ranks a network interface by name for the fallback search.
+  /// Lower is better; -1 means "never use".
   ///
-  /// Skips cellular (rmnet*, ccmni*, pdp*) and VPN (tun*, ppp*) interfaces:
-  /// mobile carriers often hand out 10.x addresses, and the old check would
-  /// have scanned the carrier's network instead of the home Wi-Fi.
+  /// Phones: skips cellular (rmnet*, ccmni*, pdp*) and VPN (tun*, ppp*)
+  /// interfaces, because carriers often hand out 10.x addresses.
+  /// Windows: skips virtual adapters such as "vEthernet (WSL)", VirtualBox,
+  /// VMware and Docker, which also use private addresses and would make the
+  /// app scan a virtual network instead of the real one.
+  static int interfacePriority(String interfaceName) {
+    final name = interfaceName.toLowerCase();
+
+    const skipPrefixes = ['rmnet', 'ccmni', 'pdp', 'tun', 'ppp', 'utun', 'ipsec'];
+    const skipParts = [
+      'vethernet', 'virtualbox', 'vmware', 'hyper-v', 'docker', 'wsl',
+      'loopback', 'bluetooth', 'tailscale', 'zerotier', 'npcap', 'vpn',
+    ];
+    if (skipPrefixes.any(name.startsWith) || skipParts.any(name.contains)) {
+      return -1;
+    }
+
+    // Wi-Fi first: Android "wlan0", Windows "Wi-Fi" / "Wireless", macOS "en0"
+    if (name.startsWith('wlan') ||
+        name.startsWith('wlp') ||
+        name.contains('wi-fi') ||
+        name.contains('wifi') ||
+        name.contains('wireless') ||
+        name == 'en0') {
+      return 0;
+    }
+    // Then wired Ethernet: Linux "eth0", macOS "en1", Windows "Ethernet"
+    if (name.startsWith('eth') || name.startsWith('en')) {
+      return 1;
+    }
+    return 2;
+  }
+
+  /// Fallback when the plugin can't report the Wi-Fi IP (e.g. a computer
+  /// connected by cable): picks the best-ranked private IPv4 address.
   Future<String?> _findLocalInterfaceIp() async {
     try {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
         includeLoopback: false,
       );
-      String? fallback;
+      String? best;
+      var bestRank = 1 << 30;
       for (final iface in interfaces) {
-        final name = iface.name.toLowerCase();
-        const skipPrefixes = ['rmnet', 'ccmni', 'pdp', 'tun', 'ppp', 'utun', 'ipsec'];
-        if (skipPrefixes.any(name.startsWith)) continue;
-
+        final rank = interfacePriority(iface.name);
+        if (rank < 0 || rank >= bestRank) continue;
         for (final addr in iface.addresses) {
-          if (!isPrivateIpv4(addr.address)) continue;
-          if (name.startsWith('wlan') || name.startsWith('en') || name.startsWith('eth')) {
-            return addr.address;
+          if (isPrivateIpv4(addr.address)) {
+            best = addr.address;
+            bestRank = rank;
+            break;
           }
-          fallback ??= addr.address;
         }
       }
-      return fallback;
+      return best;
     } catch (_) {
       return null;
     }

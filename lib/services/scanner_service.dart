@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import '../models/device_model.dart';
 import '../models/security_model.dart';
+import 'platform_support.dart';
 import 'socket_probe.dart';
 import 'vulnerability_db.dart';
 import 'vendor_lookup_service.dart';
@@ -265,12 +266,14 @@ class ScannerService {
     if (answered || isLocalPhone || isGateway || forceResolveName) {
       hostname = await _reverseLookup(ip) ??
           (isLocalPhone
-              ? 'This Mobile Device'
+              ? PlatformSupport.localDeviceName
               : (isGateway ? 'Wi-Fi Gateway Router' : 'Unknown Device'));
     }
 
     final category = isLocalPhone
-        ? DeviceCategory.phoneOrTablet
+        ? (PlatformSupport.isMobile
+            ? DeviceCategory.phoneOrTablet
+            : DeviceCategory.computer)
         : VendorLookupService.inferCategory(
             ip: ip,
             gatewayIp: gatewayIp,

@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -95,9 +97,59 @@ jobs:
             - **5-Tier Qualitative Risk Classification** (Excellent, Good, Fair, Poor, Critical)
             - **18 Curated IoT Vulnerabilities with Clear Fix Steps**
             - **Anomaly Detection (Isolation Forest + expert rules)**
+            - **Windows PC version** (zip attached below)
             - **Academic Testbed Demo Mode** (Safe demonstration on any network)
             - **Standalone HTML & Markdown Audit Reports**
             
             ### 📱 Download & Install:
             Click `Wi-Fi-Security-Guardian-v${{ steps.version.outputs.version }}.apk` below to download and install directly on any Android phone or 64-bit emulator.
           files: build/app/outputs/flutter-apk/Wi-Fi-Security-Guardian-v${{ steps.version.outputs.version }}.apk
+
+  # Windows (PC) version of the same app. Runs only after the Android job
+  # has passed analysis and unit tests.
+  build-windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.x'
+          channel: 'stable'
+          cache: true
+
+      # Without --overwrite, flutter create only adds the missing windows/
+      # folder and never touches lib/, pubspec.yaml or the tests.
+      - name: Scaffold Windows platform files
+        shell: pwsh
+        run: |
+          flutter create . --project-name wifi_guardian_app --org com.example --platforms=windows
+          if (Test-Path test/widget_test.dart) { Remove-Item test/widget_test.dart }
+          (Get-Content windows/runner/main.cpp) -replace 'L"wifi_guardian_app"', 'L"Wi-Fi Security Guardian"' | Set-Content windows/runner/main.cpp
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package Windows app
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "Wi-Fi-Security-Guardian-Windows-v${{ needs.build.outputs.version }}.zip"
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wi-Fi-Security-Guardian-Windows
+          path: Wi-Fi-Security-Guardian-Windows-v${{ needs.build.outputs.version }}.zip
+
+      - name: Add Windows zip to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: v${{ needs.build.outputs.version }}
+          name: "Wi-Fi Security Guardian v${{ needs.build.outputs.version }}"
+          files: Wi-Fi-Security-Guardian-Windows-v${{ needs.build.outputs.version }}.zip

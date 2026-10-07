@@ -16,6 +16,18 @@ A standalone, non-technical friendly mobile application built with Flutter that 
 
 ---
 
+## 💻 Windows (PC) Version
+
+The same app also runs on a Windows computer and scans the network the PC is connected to (Wi-Fi or cable).
+
+1. Open the [latest release](https://github.com/IV4N666/Moblie-fyp/releases/latest) and download `Wi-Fi-Security-Guardian-Windows-v….zip`.
+2. Extract the whole zip to a folder (keep the `.exe`, the `.dll` files and the `data` folder together).
+3. Run `wifi_guardian_app.exe`.
+4. If Windows SmartScreen says "Windows protected your PC", click **More info → Run anyway** (the app is not code-signed).
+5. If Windows Firewall asks, allow access on **Private networks** so device discovery (UPnP) works.
+
+---
+
 ## ✨ Key Features
 
 1. **Zero External Tools & No Root Required:**
@@ -126,6 +138,7 @@ wifi_guardian_app/
 │   │   ├── isolation_forest.dart          # Dependency-free Isolation Forest (Liu et al., 2008)
 │   │   ├── network_info_service.dart      # Wi-Fi IP, SSID, real gateway, RFC 1918 checks
 │   │   ├── ping_service.dart              # TCP RTT, jitter & packet-loss diagnostics
+│   │   ├── platform_support.dart          # Phone vs computer helpers (Android / Windows)
 │   │   ├── report_export_service.dart     # Escaped Markdown & HTML audit reports
 │   │   ├── scanner_service.dart           # Worker-pool TCP sweep, SSDP/UPnP discovery, demo network
 │   │   ├── security_scoring_service.dart  # Device & network scores (average + weakest link)

@@ -83,6 +83,17 @@ class WifiGuardianApp extends StatelessWidget {
           ),
         ),
       ),
+      // On a computer the window can be very wide. Limit the content width
+      // so the phone-style layout stays readable (no effect on phones).
+      builder: (context, child) => ColoredBox(
+        color: warmSurface,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: child,
+          ),
+        ),
+      ),
       home: const DashboardScreen(),
     );
   }

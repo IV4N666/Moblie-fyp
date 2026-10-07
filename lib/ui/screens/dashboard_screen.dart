@@ -12,6 +12,7 @@ import 'device_detail_screen.dart';
 import 'security_tips_screen.dart';
 import 'anomaly_detection_screen.dart';
 import '../../services/app_settings_service.dart';
+import '../../services/platform_support.dart';
 import 'expert_dashboard_view.dart';
 import 'hidden_camera_screen.dart';
 import 'custom_port_scan_screen.dart';
@@ -81,6 +82,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _requestLocationPermission() async {
+    // Location permission (needed to read the Wi-Fi name) only exists on
+    // phones. On a computer, just refresh the network details.
+    if (!PlatformSupport.isMobile) {
+      await _loadNetworkContext();
+      return;
+    }
     final status = await Permission.locationWhenInUse.request();
     if (status.isGranted) {
       await _loadNetworkContext();

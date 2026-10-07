@@ -79,6 +79,17 @@
 - CI 在构建前会运行 `flutter analyze` 和 `flutter test`；在 `flutter create --overwrite` 步骤中保留 `test/` 和 `analysis_options.yaml`；发布标签改为读取 `pubspec.yaml` 中的 `version:`，不再每次推送都覆盖 `v1.0.0`。版本号升为 1.1.0+2。
 - README 下载链接改为指向最新版本，二维码也已为该链接重新生成。
 
+## 11. Windows 电脑版
+
+App 现在也可以打包成 Windows 程序，同一套扫描功能在手机和电脑上都能用。
+
+- CI 新增第二个任务（`build-windows`），在安卓任务通过后才运行。它会生成 `windows/` 文件夹、打包 release 版本，并把 `Wi-Fi-Security-Guardian-Windows-v<版本号>.zip` 上传为 artifact，同时附加到 GitHub release。
+- `network_info_service.dart` 现在会按名称给网卡排序。Windows 上有使用私有地址的虚拟网卡（“vEthernet (WSL)”、VirtualBox、VMware、Docker），如果不处理，App 可能会去扫描虚拟网络而不是真实网络。用网线上网的电脑会使用以太网地址。
+- 电脑上不会再请求定位权限（这个权限只在手机上读取 Wi-Fi 名称时需要）。读不到 Wi-Fi 名称时，电脑会显示 “Local Network”。
+- 在电脑上，运行 App 的设备会显示为 “This Computer”，并归类为电脑。
+- 电脑窗口很宽时，内容宽度限制为 760 px，让手机风格的界面保持易读。
+- 新增测试：网卡排序（Wi-Fi 优先，其次以太网，虚拟网卡 / VPN / 移动数据网卡永远不用）。
+
 ## 仍需处理 / 已知限制
 
 - **`audit_report.md` 和 `audit_report.html` 是手写的，和 App 实际输出不一致。** 里面有 MQTT 网关和 PC 的异常分数（没有任何规则会产生这些分数）、代码从未算出过的 65.5 分，以及“IEEE OUI 厂商识别”（Android 10 以上应用无法读取 MAC 地址，所以不可能做到）。请用 App 重新生成（演示模式 → 导出 → 复制），或手动修正。
