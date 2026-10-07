@@ -25,8 +25,6 @@ class IsolationForest {
 
   IsolationForest({this.numTrees = 100, this.maxSamples = 256, this.seed = 42});
 
-  bool get isFitted => _trees.isNotEmpty;
-
   void fit(List<List<double>> data) {
     _trees.clear();
     if (data.isEmpty) return;

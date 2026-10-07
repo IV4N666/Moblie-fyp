@@ -68,19 +68,6 @@ extension RiskLevelExtension on RiskLevel {
         return 'LOW';
     }
   }
-
-  int get priority {
-    switch (this) {
-      case RiskLevel.critical:
-        return 4;
-      case RiskLevel.high:
-        return 3;
-      case RiskLevel.medium:
-        return 2;
-      case RiskLevel.low:
-        return 1;
-    }
-  }
 }
 
 class FixStep {

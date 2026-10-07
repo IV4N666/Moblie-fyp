@@ -59,11 +59,6 @@ class HistoryService {
   final Set<String> _trustedIps = {};
   SharedPreferences? _prefs;
 
-  List<AuditHistoryEntry> get history => List.unmodifiable(_history);
-
-  AuditHistoryEntry? get lastAudit =>
-      _history.isNotEmpty ? _history.last : null;
-
   /// The audit before the latest one *on the same Wi-Fi network*, so the
   /// trend arrow never compares two different networks.
   AuditHistoryEntry? get previousAudit {
@@ -149,9 +144,7 @@ class HistoryService {
     _save();
   }
 
-  String? getCustomAlias(String ip) => _customAliases[ip];
-
-  void toggleDeviceTrust(String ip, bool isTrusted) {
+  void setDeviceTrusted(String ip, bool isTrusted) {
     if (isTrusted) {
       _trustedIps.add(ip);
     } else {
@@ -159,11 +152,6 @@ class HistoryService {
     }
     _save();
   }
-
-  void setDeviceTrusted(String ip, bool isTrusted) =>
-      toggleDeviceTrust(ip, isTrusted);
-
-  bool isDeviceTrusted(String ip) => _trustedIps.contains(ip);
 
   /// Applies saved names and trust flags to freshly scanned devices.
   /// (Before, these were saved but never read back, so they vanished.)

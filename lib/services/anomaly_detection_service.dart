@@ -41,15 +41,7 @@ class DeviceAnomalyProfile {
     this.ruleScore = 0.0,
   });
 
-  bool get isSuspicious => anomalyScore >= 0.5;
   bool get isAnomalous => anomalyScore >= 0.4;
-
-  String get severityLabel {
-    if (anomalyScore >= 0.75) return 'CRITICAL ANOMALY';
-    if (anomalyScore >= 0.5) return 'SUSPICIOUS DEVIATION';
-    if (anomalyScore >= 0.25) return 'MINOR VARIANCE';
-    return 'BASELINE NORMAL';
-  }
 }
 
 /// Hybrid anomaly detection (FYP Phase 1 Report Section 5.2.2).

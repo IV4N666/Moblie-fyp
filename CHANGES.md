@@ -28,7 +28,7 @@ This file lists what was changed in the review, why, and what to update in the F
 
 ## 4. Scoring (`security_scoring_service.dart`)
 
-The network score subtracted every penalty on every device from one 100. Any network with about five devices showing a web page on port 80 reached 0, and the demo network scored **0/100 CRITICAL** while `audit_report.md` documents it as FAIR.
+The network score subtracted every penalty on every device from one 100. Any network with about five devices showing a web page on port 80 reached 0, and the demo network scored **0/100 CRITICAL** while the hand-written audit report described it as FAIR.
 
 New formula:
 
@@ -90,11 +90,20 @@ The app now also builds for Windows, so the same scanner runs on a phone and on 
 - In a wide desktop window, content is limited to 760 px wide so the phone-style layout stays readable.
 - New test: adapter ranking (Wi-Fi first, Ethernet second, virtual/VPN/mobile-data adapters never used).
 
+## 12. Repository cleanup
+
+Files and code that nothing used were removed, so the repository only holds what the app needs.
+
+- `audit_report.md` and `audit_report.html` removed. They were written by hand and did not match the app: anomaly scores no rule produces, a 65.5 score the code never computed, and "IEEE OUI manufacturer resolution", which Android 10+ does not allow. The app generates the real report (Export → Copy).
+- `ios/Runner/Info.plist` removed: the app is built for Android and Windows only, and no iOS project existed.
+- `CHANGES.zh.md` removed (duplicate of this file in Chinese).
+- Unused dependencies `multicast_dns` and `cupertino_icons` removed from `pubspec.yaml`.
+- Dead code removed: unused settings (`enableVibration`, `setMode`, `updateSettings`), unused history getters, `RiskLevel.priority`, `getAllKnownVulnerabilities`, unused anomaly labels, and port names for UDP ports no longer probed over TCP.
+- `*.patch` added to `.gitignore` so patch files used locally are never committed.
+
 ## Still to do / known limitations
 
-- **`audit_report.md` and `audit_report.html` were written by hand and do not match the app.** They show anomaly scores for the MQTT hub and the PC that no rule produces, a 65.5 score the code never computed, and "IEEE OUI manufacturer resolution", which is impossible on Android 10+ (apps cannot read MAC addresses). Regenerate them from the app (Demo Mode → Export → Copy) or correct them.
 - Only a /24 network is scanned; the subnet mask is not used yet.
-- `multicast_dns` is in pubspec.yaml but unused. Remove it, or use it to read mDNS device names (on Android this also needs a multicast lock).
 - The package ID is `com.example.wifi_guardian_app`; the Play Store rejects `com.example`.
 - `CardTheme` in `main.dart` must become `CardThemeData` if you upgrade beyond Flutter 3.22 (CI is pinned to 3.22).
 - Running `flutter create --overwrite` in CI on every build is fragile. Run it once locally and commit the `android/` folder.

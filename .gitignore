@@ -44,3 +44,6 @@ symbols/
 
 # Local configuration
 local.properties
+
+# Patch files used to apply changes locally
+*.patch

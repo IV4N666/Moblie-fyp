@@ -401,12 +401,8 @@ class ScannerService {
         return 'SSH (Encrypted Remote Access)';
       case 23:
         return 'Telnet (Unencrypted Terminal)';
-      case 69:
-        return 'TFTP (Trivial File Transfer)';
       case 80:
         return 'HTTP (Unencrypted Web Interface)';
-      case 161:
-        return 'SNMP v1/v2 (Network Management)';
       case 443:
         return 'HTTPS (Encrypted Web Interface)';
       case 445:
@@ -415,20 +411,14 @@ class ScannerService {
         return 'RTSP (Camera Video Feed)';
       case 1883:
         return 'MQTT (IoT Messaging - No TLS)';
-      case 1900:
-        return 'UPnP / SSDP (Plug & Play)';
       case 2323:
         return 'IoT Telnet (Mirai Target)';
       case 3306:
         return 'MySQL (Relational Database)';
       case 3389:
         return 'RDP (Remote Desktop)';
-      case 5353:
-        return 'mDNS / ZeroConf Discovery';
       case 5432:
         return 'PostgreSQL (Database Service)';
-      case 5683:
-        return 'CoAP (Constrained IoT Protocol)';
       case 5900:
         return 'VNC (Remote Desktop)';
       case 6379:
@@ -460,12 +450,8 @@ class ScannerService {
         return 'Encrypted administrative terminal shell.';
       case 23:
         return 'Legacy terminal protocol sending cleartext passwords.';
-      case 69:
-        return 'Trivial file transfer without authentication.';
       case 80:
         return 'Standard web management interface without HTTPS.';
-      case 161:
-        return 'Simple Network Management Protocol with weak community strings.';
       case 443:
         return 'TLS encrypted secure web server.';
       case 445:
@@ -474,20 +460,14 @@ class ScannerService {
         return 'Streaming video protocol commonly used by security cameras.';
       case 1883:
         return 'IoT telemetry broker without SSL/TLS encryption.';
-      case 1900:
-        return 'UPnP service capable of automatically opening router firewall ports.';
       case 2323:
         return 'Alternate Telnet debug console frequently exploited by IoT botnets.';
       case 3306:
         return 'Direct SQL database port listening on local network.';
       case 3389:
         return 'Windows Remote Desktop protocol listening for logons.';
-      case 5353:
-        return 'Local service discovery broadcasting device identity metadata.';
       case 5432:
         return 'Direct PostgreSQL database connection endpoint.';
-      case 5683:
-        return 'Constrained Application Protocol IoT messaging service.';
       case 5900:
         return 'Graphical remote desktop without transport encryption.';
       case 6379:

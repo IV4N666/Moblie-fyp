@@ -150,6 +150,5 @@ wifi_guardian_app/
 │       └── widgets/                       # Report modal, score gauge, vulnerability card
 ├── test/                                  # Unit tests (run with `flutter test`)
 ├── android/app/src/main/AndroidManifest.xml
-├── ios/Runner/Info.plist
 └── pubspec.yaml
 ```
