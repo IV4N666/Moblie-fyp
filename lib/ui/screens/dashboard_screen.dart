@@ -59,6 +59,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _settingsService.addListener(_onSettingsChanged);
     _loadNetworkContext();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showFirstRunNotice());
+  }
+
+  /// Shown once: responsible use and privacy, before the first scan.
+  Future<void> _showFirstRunNotice() async {
+    if (!mounted || _historyService.hasAcceptedNotice) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Before you start'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Only scan networks you own or have permission to test.\n\n'
+            'Everything stays on this device. Scan results, history and device names are never uploaded.\n\n'
+            'The score shows exposed services on your network. It does not check passwords, firmware or Wi-Fi encryption, so a high score is not a guarantee of safety.',
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () {
+              _historyService.acceptNotice();
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('I understand'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

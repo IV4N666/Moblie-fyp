@@ -118,10 +118,19 @@ Other changes:
 - New `test/scoring_method_test.dart` checks every knowledge-base entry against the method.
 - The demo network now scores **48 (POOR)** instead of 62 (FAIR).
 
+## 14. Ready to share
+
+- **First-run notice**: shown once before the first scan. It asks users to scan only networks they own or may test, and explains that nothing is uploaded and what the score does not cover.
+- **Stable Android updates**: CI can sign the APK with your own upload key (`docs/release-signing.md`, `tool/ci/configure_android_signing.py`). Without the secrets it warns and falls back to a temporary debug key.
+- **App ID** changed from `com.example.wifi_guardian_app` to `com.iv4n666.wifi_guardian_app` (the Play Store rejects `com.example`). Early test builds must be uninstalled once.
+- **App icon** for Android (adaptive) and Windows, generated in CI from `assets/icon/` with `flutter_launcher_icons`.
+- **Windows package**: the program is now `WiFiSecurityGuardian.exe`, and the zip includes a `README.txt` with run instructions.
+- **CI simplified**: `flutter create` runs without `--overwrite`, so the backup/restore steps are gone.
+- **Ping and port-scan screens**: pressing Stop and then Start quickly could run two tests at once, and a test kept running after leaving the screen. Each run now has an id and stops as soon as it is replaced or the screen closes.
+- **README**: install steps for Android and Windows, privacy and responsible-use section, and correct build-from-source steps (the old ones failed because the `android/` folder is generated).
+
 ## Still to do / known limitations
 
 - Only a /24 network is scanned; the subnet mask is not used yet.
-- The package ID is `com.example.wifi_guardian_app`; the Play Store rejects `com.example`.
 - `CardTheme` in `main.dart` must become `CardThemeData` if you upgrade beyond Flutter 3.22 (CI is pinned to 3.22).
-- Running `flutter create --overwrite` in CI on every build is fragile. Run it once locally and commit the `android/` folder.
 - Custom names and trust are keyed by IP address, so they do not follow a device whose DHCP address changes.

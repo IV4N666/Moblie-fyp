@@ -16,7 +16,8 @@ class _PingDiagnosticScreenState extends State<PingDiagnosticScreen> {
   int _targetPort = 80;
   int _totalCount = 15;
   bool _isRunning = false;
-  bool _stopRequested = false;
+  /// Increases on every start/stop; a running test stops when it changes.
+  int _runId = 0;
 
   final List<PingSample> _samples = [];
   final ScrollController _scrollController = ScrollController();
@@ -45,12 +46,12 @@ class _PingDiagnosticScreenState extends State<PingDiagnosticScreen> {
 
     setState(() {
       _isRunning = true;
-      _stopRequested = false;
       _samples.clear();
     });
+    final runId = ++_runId;
 
     for (int i = 1; i <= _totalCount; i++) {
-      if (_stopRequested) break;
+      if (runId != _runId || !mounted) break;
 
       final sample = await PingDiagnosticService.singleProbe(
         host: host,
@@ -59,24 +60,23 @@ class _PingDiagnosticScreenState extends State<PingDiagnosticScreen> {
         timeoutMs: 1200,
       );
 
-      if (mounted) {
-        setState(() {
-          _samples.add(sample);
-        });
-        // Auto scroll to bottom
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-          );
-        }
+      if (runId != _runId || !mounted) break;
+      setState(() {
+        _samples.add(sample);
+      });
+      // Auto scroll to bottom
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
       }
 
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    if (mounted) {
+    if (mounted && runId == _runId) {
       setState(() {
         _isRunning = false;
       });
@@ -85,7 +85,7 @@ class _PingDiagnosticScreenState extends State<PingDiagnosticScreen> {
 
   void _stopPing() {
     setState(() {
-      _stopRequested = true;
+      _runId++;
       _isRunning = false;
     });
   }

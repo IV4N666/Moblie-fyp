@@ -1,0 +1,11 @@
+# Kept next to pubspec.yaml: flutter_launcher_icons requires custom config files there.
+# (Not named flutter_launcher_icons-*.yaml, which the tool treats as build flavors.)
+# App icon for Windows, generated in CI with:
+#   dart run flutter_launcher_icons -f launcher_icons_windows.yaml
+flutter_launcher_icons:
+  android: false
+  ios: false
+  windows:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+    icon_size: 256

@@ -52,12 +52,22 @@ class HistoryService {
   static const _historyKey = 'audit_history_v1';
   static const _aliasesKey = 'device_aliases_v1';
   static const _trustedKey = 'trusted_ips_v1';
+  static const _noticeKey = 'responsible_use_notice_v1';
   static const int maxEntries = 50;
 
   final List<AuditHistoryEntry> _history = [];
   final Map<String, String> _customAliases = {};
   final Set<String> _trustedIps = {};
+  bool _noticeAccepted = false;
   SharedPreferences? _prefs;
+
+  /// Whether the user has confirmed the first-run "responsible use" notice.
+  bool get hasAcceptedNotice => _noticeAccepted;
+
+  void acceptNotice() {
+    _noticeAccepted = true;
+    _prefs?.setBool(_noticeKey, true);
+  }
 
   /// The audit before the latest one *on the same Wi-Fi network*, so the
   /// trend arrow never compares two different networks.
@@ -96,6 +106,8 @@ class HistoryService {
       _trustedIps
         ..clear()
         ..addAll(prefs.getStringList(_trustedKey) ?? const <String>[]);
+
+      _noticeAccepted = prefs.getBool(_noticeKey) ?? false;
     } catch (_) {
       // Corrupt or unavailable storage: start fresh instead of crashing at launch.
     }

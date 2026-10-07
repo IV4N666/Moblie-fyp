@@ -35,7 +35,10 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
   late TextEditingController _portsController;
 
   bool _isScanning = false;
-  bool _cancelRequested = false;
+
+  /// Increases on every start/stop. A running scan stops as soon as the id
+  /// changes, so Stop followed by Start can never run two scans at once.
+  int _runId = 0;
   bool _rangeWasTrimmed = false;
   int _scannedCount = 0;
   int _totalPorts = 0;
@@ -167,15 +170,15 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
 
     setState(() {
       _isScanning = true;
-      _cancelRequested = false;
       _results.clear();
       _scannedCount = 0;
       _totalPorts = ports.length;
     });
 
     const int batchSize = 15;
+    final runId = ++_runId;
     for (int i = 0; i < ports.length; i += batchSize) {
-      if (_cancelRequested) break;
+      if (runId != _runId || !mounted) break;
 
       final batch = ports.sublist(i, (i + batchSize > ports.length) ? ports.length : i + batchSize);
       final batchResults = await Future.wait(batch.map((port) async {
@@ -193,7 +196,7 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
       }));
 
       // Stop pressed while this batch was running: discard it.
-      if (_cancelRequested) break;
+      if (runId != _runId || !mounted) break;
 
       if (mounted) {
         setState(() {
@@ -203,7 +206,7 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
       }
     }
 
-    if (mounted && !_cancelRequested) {
+    if (mounted && runId == _runId) {
       setState(() {
         _isScanning = false;
       });
@@ -219,7 +222,7 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
 
   void _stopScan() {
     setState(() {
-      _cancelRequested = true;
+      _runId++;
       _isScanning = false;
     });
   }

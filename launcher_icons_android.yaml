@@ -1,0 +1,11 @@
+# Kept next to pubspec.yaml: flutter_launcher_icons requires custom config files there.
+# (Not named flutter_launcher_icons-*.yaml, which the tool treats as build flavors.)
+# App icon for Android, generated in CI with:
+#   dart run flutter_launcher_icons -f launcher_icons_android.yaml
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  android: true
+  ios: false
+  min_sdk_android: 21
+  adaptive_icon_background: "#6D4C41"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"

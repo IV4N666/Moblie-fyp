@@ -4,27 +4,35 @@ A standalone, non-technical friendly mobile application built with Flutter that 
 
 ---
 
-## 📥 Quick Download & Installation (Android)
+## 📥 Download & Install
 
-| Official Release | Direct APK Download | Scan to Download (QR Code) |
+| Official Release | Download | Scan to Download (QR Code) |
 | :---: | :---: | :---: |
-| [![GitHub Release](https://img.shields.io/github/v/release/IV4N666/Moblie-fyp?style=for-the-badge&logo=github&color=2e7d32)](https://github.com/IV4N666/Moblie-fyp/releases/latest) | [![Download APK](https://img.shields.io/badge/Download-Latest%20APK-6D4C41?style=for-the-badge&logo=android)](https://github.com/IV4N666/Moblie-fyp/releases/latest) | <img src="download_qr_code.png" width="130" alt="Scan to Download APK"> |
+| [![GitHub Release](https://img.shields.io/github/v/release/IV4N666/Moblie-fyp?style=for-the-badge&logo=github&color=2e7d32)](https://github.com/IV4N666/Moblie-fyp/releases/latest) | [![Download](https://img.shields.io/badge/Download-Android%20%26%20Windows-6D4C41?style=for-the-badge&logo=github)](https://github.com/IV4N666/Moblie-fyp/releases/latest) | <img src="download_qr_code.png" width="130" alt="Scan to open the latest release"> |
 
-- **Latest Release (APK attached):** [GitHub Releases – latest](https://github.com/IV4N666/Moblie-fyp/releases/latest)
-- Each push to `main` publishes a release named after `version:` in `pubspec.yaml`.
-- **Compatibility:** Android 7.0+ (ARM64真机、手机、平板及 64 位模拟器)
+Every release contains an Android APK and a Windows zip. Each push to `main` publishes a release named after `version:` in `pubspec.yaml`.
 
----
+### 📱 Android (7.0 or newer)
 
-## 💻 Windows (PC) Version
+1. On your phone, open the [latest release](https://github.com/IV4N666/Moblie-fyp/releases/latest) and download `Wi-Fi-Security-Guardian-v….apk`.
+2. Open the file. When asked, allow **Install unknown apps** for your browser or file manager.
+3. Connect to your Wi-Fi, open the app and tap **Scan Connected Devices** (or the graduation-cap icon for **Demo Mode**).
 
-The same app also runs on a Windows computer and scans the network the PC is connected to (Wi-Fi or cable).
+If you installed an early test build (app ID `com.example.wifi_guardian_app`), uninstall it first.
 
-1. Open the [latest release](https://github.com/IV4N666/Moblie-fyp/releases/latest) and download `Wi-Fi-Security-Guardian-Windows-v….zip`.
+### 💻 Windows 10 / 11 (64-bit)
+
+1. Download `Wi-Fi-Security-Guardian-Windows-v….zip` from the [latest release](https://github.com/IV4N666/Moblie-fyp/releases/latest).
 2. Extract the whole zip to a folder (keep the `.exe`, the `.dll` files and the `data` folder together).
-3. Run `wifi_guardian_app.exe`.
+3. Run `WiFiSecurityGuardian.exe`.
 4. If Windows SmartScreen says "Windows protected your PC", click **More info → Run anyway** (the app is not code-signed).
 5. If Windows Firewall asks, allow access on **Private networks** so device discovery (UPnP) works.
+
+### 🔒 Privacy & Responsible Use
+
+- Everything stays on your device: scan results, history and device names are never uploaded. The app only talks to devices on your own local network.
+- Only scan networks you own or have permission to test. The custom port scanner only accepts private (local) addresses.
+- The score reflects exposed services. It does not check passwords, firmware versions or Wi-Fi encryption, so a high score is not a guarantee of safety.
 
 ---
 
@@ -84,35 +92,29 @@ Each risky service is scored with CVSS v3.1 (attacker on the same Wi-Fi), raised
 
 ---
 
-## 📱 How to Build the Standalone APK
+## 🛠️ Building From Source
 
-### Prerequisites
-- Install [Flutter SDK](https://docs.flutter.dev/get-started/install) (version 3.0.0 or higher).
-- Android Studio or VS Code with Flutter extension.
+GitHub Actions builds both apps automatically (`.github/workflows/build_apk.yml`). To build locally:
 
-### Step-by-Step Instructions
-
-1. **Open the project folder:**
+1. Install [Flutter](https://docs.flutter.dev/get-started/install) **3.22.x** (the version CI uses). For Windows builds you also need Visual Studio 2022 with "Desktop development with C++".
+2. Generate the platform folders once (only `AndroidManifest.xml` is kept in the repository), then remove the sample test it creates:
    ```bash
-   cd "Mobile FYP"
+   flutter create . --project-name wifi_guardian_app --org com.iv4n666 --platforms=android,windows
+   rm test/widget_test.dart        # Windows: del test\widget_test.dart
    ```
-
-2. **Fetch all dependencies:**
+3. Install dependencies and generate the app icons:
    ```bash
    flutter pub get
+   dart run flutter_launcher_icons -f launcher_icons_android.yaml
+   dart run flutter_launcher_icons -f launcher_icons_windows.yaml
    ```
-
-3. **Build the Standalone APK:**
+4. Build:
    ```bash
-   flutter build apk --release
+   flutter build apk --release      # build/app/outputs/flutter-apk/app-release.apk
+   flutter build windows --release  # build/windows/x64/runner/Release/
    ```
-   The resulting standalone installer will be located at:
-   `build/app/outputs/flutter-apk/app-release.apk`
 
-4. **Install on any Android phone:**
-   - Transfer `app-release.apk` to your phone via USB, Google Drive, or email.
-   - Tap the APK file on your phone and select **Install**.
-   - Open the app, connect to your home Wi-Fi, and tap **Scan Connected Devices** (or tap the graduation cap icon for **Demo Mode**).
+To sign Android releases with your own key (needed so people can update without uninstalling), follow [docs/release-signing.md](docs/release-signing.md).
 
 ---
 
@@ -155,6 +157,9 @@ wifi_guardian_app/
 │       ├── screens/                       # Dashboard, expert view, device detail, tools
 │       └── widgets/                       # Report modal, score gauge, vulnerability card
 ├── test/                                  # Unit tests (run with `flutter test`)
+├── docs/                                  # Scoring method, release signing, Windows readme
+├── assets/icon/                           # App icon (Android adaptive + Windows)
+├── tool/ci/                               # CI helper: Android release signing
 ├── android/app/src/main/AndroidManifest.xml
 └── pubspec.yaml
 ```
