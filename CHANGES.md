@@ -129,6 +129,14 @@ Other changes:
 - **Ping and port-scan screens**: pressing Stop and then Start quickly could run two tests at once, and a test kept running after leaving the screen. Each run now has an id and stops as soon as it is replaced or the screen closes.
 - **README**: install steps for Android and Windows, privacy and responsible-use section, and correct build-from-source steps (the old ones failed because the `android/` folder is generated).
 
+## 15. Trust and plain language
+
+- **Shorter text everywhere users read**: first-run notice (3 short lines), knowledge-base explanations (one sentence each), fix steps, security tips, camera and anomaly screens, and status messages. The scoring line on each finding is now compact (e.g. "CVSS 8.8 · +1 level (known attacks) · -45 pts").
+- **Removed fake data**: the device screen showed an "OS Fingerprint (TTL)" that was never measured; it now shows the real response time.
+- **Fewer permissions**: `CHANGE_WIFI_MULTICAST_STATE` was never used and is removed.
+- **Google Play ready**: when signing secrets are set, CI also builds an App Bundle (`.aab`) for Google Play. Guide: `docs/google-play.md`. Apps installed from Google Play do not get the "unsafe app" warning that phones show for downloaded APKs.
+- **Privacy policy** added (`docs/privacy-policy.md`), required by Google Play because the app can ask for location (only used to read the Wi-Fi name).
+
 ## Still to do / known limitations
 
 - Only a /24 network is scanned; the subnet mask is not used yet.

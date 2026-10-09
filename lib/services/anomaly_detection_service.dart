@@ -129,11 +129,8 @@ class AnomalyDetectionService {
         findings.add(AnomalyFinding(
           title: 'Statistical outlier on this network (Isolation Forest)',
           description:
-              'Exposes ${rarePorts.length == 1 ? 'port' : 'ports'} ${rarePorts.join(', ')}, '
-              'which few other devices on this network expose. '
-              'Isolation score ${isolationScore.toStringAsFixed(2)} '
-              '(0.50 = typical, 1.00 = highly unusual). Unusual does not '
-              'automatically mean dangerous: check whether these services are needed.',
+              'Has ${rarePorts.length == 1 ? 'a port' : 'ports'} few other devices here have: ${rarePorts.join(', ')}. '
+              'Isolation score ${isolationScore.toStringAsFixed(2)} (0.50 = typical). Unusual is not always dangerous.',
           severity: isolationScore >= 0.7
               ? AnomalySeverity.suspicious
               : AnomalySeverity.low,

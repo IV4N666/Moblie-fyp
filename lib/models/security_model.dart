@@ -178,16 +178,13 @@ class SecurityVulnerability {
 
   double get cvssBaseScore => CvssV31.baseScore(cvssVector);
 
-  /// One line explaining where the penalty comes from (shown in the app
-  /// and in exported reports).
+  /// Short line showing where the penalty comes from, e.g.
+  /// "CVSS 8.8 · +1 level (known attacks) · -45 pts".
   String get scoringBasis {
-    final score = cvssBaseScore.toStringAsFixed(1);
-    final band = RiskLevelExtension.fromCvss(cvssBaseScore)?.displayName ?? 'NONE';
-    final raised = threatEvidence == null
-        ? ''
-        : ', raised to ${riskLevel.displayName} because of $threatEvidence';
-    return 'CVSS v3.1 $score ($band) for an attacker on the same Wi-Fi$raised. Penalty: -$penaltyPoints points.';
+    final raised = threatEvidence == null ? '' : ' · +1 level (known attacks)';
+    return 'CVSS ${cvssBaseScore.toStringAsFixed(1)}$raised · -$penaltyPoints pts';
   }
+
 }
 
 class NetworkAuditResult {

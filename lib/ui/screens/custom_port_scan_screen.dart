@@ -148,7 +148,7 @@ class _CustomPortScanScreenState extends State<CustomPortScanScreen> {
     if (!NetworkInfoService.isPrivateIpv4(targetIp)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Only devices on your own local network can be scanned (addresses starting 192.168., 10. or 172.16–31.).'),
+          content: Text('Only addresses on your own network can be scanned.'),
         ),
       );
       return;

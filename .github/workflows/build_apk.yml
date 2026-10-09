@@ -78,6 +78,18 @@ jobs:
       - name: Build Android Release APK
         run: flutter build apk --release --no-tree-shake-icons
 
+      # Google Play needs an App Bundle signed with your upload key.
+      - name: Build Android App Bundle (for Google Play)
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        run: flutter build appbundle --release --no-tree-shake-icons
+
+      - name: Upload App Bundle Artifact
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wi-Fi-Security-Guardian-GooglePlay-AAB
+          path: build/app/outputs/bundle/release/app-release.aab
+
       - name: Rename APK for Release
         run: cp build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/Wi-Fi-Security-Guardian-v${{ steps.version.outputs.version }}.apk"
 

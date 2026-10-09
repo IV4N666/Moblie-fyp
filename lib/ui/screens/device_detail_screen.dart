@@ -146,7 +146,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     if (widget.isDemoMode) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Re-check needs a real scan. Turn off Demo Mode and scan your network first.'),
+          content: Text('Re-check works on real scans only.'),
           backgroundColor: primaryWarm,
         ),
       );
@@ -181,7 +181,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       // app announced "Device is fully secured!".
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('The device did not respond, so the fix could not be confirmed. Make sure it is switched on and connected, then try again.'),
+          content: Text('No reply from the device. Check it is on, then try again.'),
           backgroundColor: Color(0xFFD97706),
         ),
       );
@@ -418,7 +418,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'OS Fingerprint: ${device.category == DeviceCategory.computer ? "TTL ≈ 128 (Windows NT/Server Stack)" : "TTL ≈ 64 (Linux / Embedded RTOS Stack)"}',
+                    'Response time: ${device.responseTimeMs} ms',
                     style: const TextStyle(color: Color(0xFFBCAAA4), fontSize: 11, fontFamily: 'monospace'),
                   ),
                   const Divider(color: Color(0xFF5D4037), height: 16),

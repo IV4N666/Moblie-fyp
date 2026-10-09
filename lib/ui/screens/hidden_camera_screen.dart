@@ -179,7 +179,7 @@ class _HiddenCameraScreenState extends State<HiddenCameraScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'This only checks devices connected to this same Wi-Fi. Cameras on mobile data, on a separate network, or recording to a memory card will not appear here, so also check the room physically.',
+                          'Only cameras on this Wi-Fi can be found. Also check the room yourself.',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                         ),
@@ -289,7 +289,7 @@ class _HiddenCameraScreenState extends State<HiddenCameraScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Privacy Tip: When staying at hotels or rental properties, run this check after connecting to Wi-Fi. Legitimate smart TVs may show media ports, but active RTSP (554) video streams indicate an active camera on your shared local network.',
+                          'Tip: In a hotel or rental, run this after joining the Wi-Fi.',
                           style: TextStyle(fontSize: 12, color: Colors.brown.shade800, height: 1.4),
                         ),
                       ),

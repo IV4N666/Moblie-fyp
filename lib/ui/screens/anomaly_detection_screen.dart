@@ -87,7 +87,7 @@ class AnomalyDetectionScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Flags devices whose open services look unusual compared with the rest of your network, plus known-bad combinations (e.g., a smart plug or camera running Telnet). Needs at least 4 devices for the statistical part.',
+                  'Finds devices that behave differently from the rest of your network.',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.92),
                     fontSize: 12.5,

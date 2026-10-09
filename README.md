@@ -20,6 +20,8 @@ Every release contains an Android APK and a Windows zip. Each push to `main` pub
 
 If you installed an early test build (app ID `com.example.wifi_guardian_app`), uninstall it first.
 
+Phones warn about apps downloaded outside Google Play. To share without this warning, publish through Google Play testing: see [docs/google-play.md](docs/google-play.md).
+
 ### 💻 Windows 10 / 11 (64-bit)
 
 1. Download `Wi-Fi-Security-Guardian-Windows-v….zip` from the [latest release](https://github.com/IV4N666/Moblie-fyp/releases/latest).
@@ -30,7 +32,7 @@ If you installed an early test build (app ID `com.example.wifi_guardian_app`), u
 
 ### 🔒 Privacy & Responsible Use
 
-- Everything stays on your device: scan results, history and device names are never uploaded. The app only talks to devices on your own local network.
+- Everything stays on your device: scan results, history and device names are never uploaded. The app only talks to devices on your own local network. Full [privacy policy](docs/privacy-policy.md).
 - Only scan networks you own or have permission to test. The custom port scanner only accepts private (local) addresses.
 - The score reflects exposed services. It does not check passwords, firmware versions or Wi-Fi encryption, so a high score is not a guarantee of safety.
 

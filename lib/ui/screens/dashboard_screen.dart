@@ -69,12 +69,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Before you start'),
+        title: const Text('Before you scan'),
         content: const SingleChildScrollView(
           child: Text(
-            'Only scan networks you own or have permission to test.\n\n'
-            'Everything stays on this device. Scan results, history and device names are never uploaded.\n\n'
-            'The score shows exposed services on your network. It does not check passwords, firmware or Wi-Fi encryption, so a high score is not a guarantee of safety.',
+            '• Only scan networks you own or may test.\n'
+            '• Nothing leaves this device.\n'
+            '• The score checks open services, not passwords.',
           ),
         ),
         actions: [
@@ -183,7 +183,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _networkContext = ctx;
         _isScanning = false;
         _scanStatusText =
-            'No Wi-Fi connection found. Connect to Wi-Fi, or turn on Demo Mode.';
+            'Not on Wi-Fi. Connect, or try Demo mode.';
       });
       return;
     }
@@ -256,7 +256,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _isScanning = false;
         _hasCompletedScan = true;
         _scanStatusText = wasCancelled
-            ? 'Partial scan: ${results.length} devices found before stopping (not saved to history).'
+            ? 'Stopped early: ${results.length} devices found.'
             : 'Scan completed. Found ${results.length} active devices.';
       });
     }
@@ -506,7 +506,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Demo Mode: Simulating Phase 1 test network (8 devices with realistic IoT vulnerabilities).',
+                        'Demo mode: a sample network with 8 devices.',
                         style: const TextStyle(
                           fontSize: 12,
                           color: Color(0xFF5D4037),
@@ -872,7 +872,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'No network scan results yet.\nTap "Scan Connected Devices" or "Run Demo Audit" to evaluate.',
+                      'No scan yet.\nTap Scan to check your Wi-Fi.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: softBrown, fontSize: 13),
                     ),
